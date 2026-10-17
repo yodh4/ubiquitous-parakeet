@@ -1,0 +1,48 @@
+services:
+  service-a:
+    build:
+      context: ./services/service-a
+      dockerfile: Dockerfile
+    container_name: service-a
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVICE_A_PORT=8000
+      - SERVICE_A_SERVICE_B_URL=http://service-b:8001
+      - SERVICE_A_REQUEST_TIMEOUT_SECONDS=5.0
+    networks:
+      - sandbox-net
+    depends_on:
+      - service-b
+
+  service-b:
+    build:
+      context: ./services/service-b
+      dockerfile: Dockerfile
+    container_name: service-b
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE_B_PORT=8001
+    networks:
+      - sandbox-net
+
+  # RabbitMQ Message Broker (Ready for Milestone 3)
+  # Host port 5673 mapped to container 5672 to avoid port collision with host services
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: sandbox-rabbitmq
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - sandbox-net
+    profiles:
+      - with-broker
+
+networks:
+  sandbox-net:
+    driver: bridge

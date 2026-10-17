@@ -1,0 +1,1 @@
+"""Service A - Ingress / Producer"""

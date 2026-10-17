@@ -1,0 +1,1 @@
+"""Service B - Worker / Consumer"""
