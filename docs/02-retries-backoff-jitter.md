@@ -42,23 +42,6 @@ flowchart TD
     style ActionFail fill:#fee2e2,stroke:#dc2626,stroke-width:2px
 ```
 
-```text
-                                Incoming Failure
-                                       │
-            ┌──────────────────────────┴──────────────────────────┐
-            ▼                                                     ▼
-   TRANSIENT (Retryable)                               PERMANENT (Non-Retryable)
-   - HTTP 503 (Service Unavailable)                    - HTTP 400 (Bad Request)
-   - HTTP 504 (Gateway Timeout)                        - HTTP 401 (Unauthorized)
-   - HTTP 429 (Too Many Requests - with care)          - HTTP 403 (Forbidden)
-   - Network Timeout (Socket Read Timeout)             - HTTP 404 (Not Found)
-   - Connection Reset by Peer (ECONNRESET)             - HTTP 422 (Unprocessable Entity)
-   - DNS Resolution Timeout                            - HTTP 500 (Internal Server Error due to syntax/schema)
-            │                                                     │
-            ▼                                                     ▼
-  SCHEDULE RETRY WITH BACKOFF                          FAIL IMMEDIATELY TO CALLER
-```
-
 ### The Rule:
 * If the failure is caused by a **bad client request** (e.g. invalid JSON, missing authentication header, non-existent record), retrying 1,000 times will produce the exact same error 1,000 times, wasting CPU and bandwidth.
 * Only retry errors where **the state of the downstream system may change over time**.
@@ -90,28 +73,6 @@ sequenceDiagram
     Clients->>ServiceB: 500 Retries + 1,000 New Requests = 1,500 Requests
     Note over ServiceB: Service B crashes completely (OOM / Connection Refused)
     ServiceB--x Clients: TOTAL CASCADING OUTAGE
-```
-
-```text
-                               THE RETRY STORM SCENARIO
-                               
- 1,000 Clients                                             Service B
-      │                                                       │
-      ├─── Send 1,000 requests ─────────────────────────────► │ (Under heavy load!)
-      │                                                       │
-      │ ◄── Service B drops 200 requests (returns 503) ───────┤
-      │                                                       │
-   [200 Clients immediately retry after a fixed 100ms]        │
-      │                                                       │
-      ├─── Send 200 retries + 1,000 NEW regular requests ───► │ (Now receiving 1,200 req!)
-      │                                                       │
-      │ ◄── Service B is now overwhelmed; drops 500 req ──────┤
-      │                                                       │
-   [500 Clients retry simultaneously]                         │
-      │                                                       │
-      ├─── Send 500 retries + 1,000 NEW regular requests ───► │ (Now receiving 1,500 req!)
-      ▼                                                       ▼
-                       [SERVICE B CRASHES COMPLETELY]
 ```
 
 This self-inflicted disaster is called a **Retry Storm** (or the **Thundering Herd Problem**). When clients retry with a fixed delay, their requests naturally synchronize into synchronized "pulses" or waves that overwhelm the backend.
@@ -183,25 +144,6 @@ flowchart TD
     style WithJitter fill:#dcfce7,stroke:#16a34a
 ```
 
-```text
-Without Jitter (Synchronized Traffic Spikes):
-Requests
-  ▲
-  │   █                 █                           █
-  │   █                 █                           █
-  │   █                 █                           █
-  │───█─────────────────█───────────────────────────█─────────► Time
-     (0ms)            (100ms)                     (300ms)
-
-With Full Jitter (Smooth, Spread Distribution):
-Requests
-  ▲
-  │
-  │   ▄   ▃ ▅  ▂ ▄  ▅ ▃  ▂ ▄  ▃ ▂ ▅  ▄ ▂ ▃  ▄  ▂ ▅  ▄
-  │───█───█─█──█─█──█─█──█─█──█─█─█──█─█─█──█──█─█──█───────► Time
-     (Traffic is evenly dispersed across the timeline)
-```
-
 ### The Three Jitter Algorithms (AWS Architecture Paper)
 
 In 2015, AWS published the definitive research paper on jitter algorithms (*"Exponential Backoff And Jitter"*, Marc Brooker). Here are the three primary formulas:
@@ -271,23 +213,29 @@ An operation is **idempotent** if performing it multiple times with the same par
 * In HTTP: `POST` is **NOT idempotent** by default (e.g. creates a new order, charges a card, appends a record).
 
 ### What Happens When You Blindly Retry a POST?
-```text
-Service A                                               Service B (Payment Service)
-   │                                                               │
-   │ ─── 1. POST /charge ($50) ──────────────────────────────────► │
-   │                                                               │
-   │     [Service B successfully charges credit card $50]          │
-   │                                                               │
-   │ ◄─X─ [Network drops response packet on the wire!] ─────────── │
-   │                                                               │
-[Service A experiences a Read Timeout!]                            │
-[Service A thinks: "The request failed, I should retry!"]          │
-   │                                                               │
-   │ ─── 2. RETRY POST /charge ($50) ────────────────────────────► │
-   │                                                               │
-   │     [Service B charges credit card $50 A SECOND TIME!]        │
-   ▼                                                               ▼
-   [Customer is double charged $100!]
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant ServiceA as Service A
+    participant ServiceB as Service B (Payment)
+
+    Client->>ServiceA: Checkout ($50)
+    ServiceA->>ServiceB: 1. POST /charge ($50)
+    activate ServiceB
+    Note over ServiceB: Successfully charged credit card $50!
+    ServiceB--x ServiceA: Network drops response on the wire!
+    deactivate ServiceB
+
+    Note over ServiceA: Read Timeout! Service A assumes request failed.
+
+    ServiceA->>ServiceB: 2. RETRY POST /charge ($50)
+    activate ServiceB
+    Note over ServiceB: Charges credit card $50 A SECOND TIME!
+    ServiceB-->>ServiceA: HTTP 200 OK
+    deactivate ServiceB
+    ServiceA-->>Client: Checkout Complete (Customer double-charged $100!)
 ```
 
 ### The Solution:

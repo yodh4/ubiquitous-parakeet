@@ -31,7 +31,7 @@ flowchart TD
     subgraph ServiceA ["Service A (Ingress / Coordinator)"]
         subgraph Layer1 ["1. Circuit Breaker (Outer Guard)"]
             CB{"Circuit State?"}
-            FastFail["Fast Degraded Fallback\n(&lt; 5ms, Zero Network I/O)"]
+            FastFail["Fast Degraded Fallback\n(under 5ms, Zero Network I/O)"]
             CB -->|"OPEN (Tripped)"| FastFail
         end
 
@@ -50,34 +50,6 @@ flowchart TD
     TimeoutExec -->|"HTTP POST /work"| ServiceB[("Service B\nWorker Node")]
     FastFail -->|"Immediate Fallback"| Client
     ServiceB -.->|"Success or Failure"| TimeoutExec
-```
-
-```text
-                                  Incoming Client Request
-                                             │
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │         CIRCUIT BREAKER (Outer)         │
-                        │  Detects systemic downstream outages.   │
-                        │  If OPEN: Skips network, fails fast.    │
-                        └────────────────────┬────────────────────┘
-                                             │ If CLOSED / HALF-OPEN
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          RETRY + JITTER (Middle)        │
-                        │  Absorbs brief, transient network blips │
-                        │  with randomized, spaced attempts.      │
-                        └────────────────────┬────────────────────┘
-                                             │ Per Attempt
-                                             ▼
-                        ┌─────────────────────────────────────────┐
-                        │          STRICT TIMEOUT (Inner)         │
-                        │  Enforces a hard deadline per attempt.  │
-                        │  Prevents threads/sockets from hanging. │
-                        └────────────────────┬────────────────────┘
-                                             │ HTTP Call
-                                             ▼
-                                  Service B (Worker Node)
 ```
 
 ---

@@ -48,26 +48,6 @@ sequenceDiagram
     end
 ```
 
-```text
-Service A (Client)                                          Service B (Server)
-   │                                                               │
-   │ ─── 1. DNS Resolution (domain -> IP) ───────────────────────► │
-   │                                                               │
-   │ ─── 2. TCP Handshake (SYN) ─────────────────────────────────► │
-   │ ◄─── TCP Handshake (SYN-ACK) ──────────────────────────────── │ ── [Connect Phase]
-   │ ─── TCP Handshake (ACK) ────────────────────────────────────► │
-   │                                                               │
-   │ ─── 3. TLS Handshake (if HTTPS) ────────────────────────────► │
-   │                                                               │
-   │ ─── 4. Send Request Headers & Body ─────────────────────────► │ ── [Write Phase]
-   │                                                               │
-   │     [Service B processes request in memory/database...]       │
-   │                                                               │
-   │ ◄─── 5. Receive First Response Byte (Headers) ─────────────── │ ── [Read Phase]
-   │ ◄─── 6. Stream Remaining Response Body ────────────────────── │
-   │                                                               │
-```
-
 ### The 4 Distinct Timeout Types in `httpx`:
 
 ```python
@@ -105,29 +85,19 @@ flowchart TD
     Client --> S5
 
     subgraph Microservices ["Downstream Services (Each has 99% fast SLA, p99 = 2.0s)"]
-        S1["Service 1<br/>(1% chance of &gt; 2s)"]
-        S2["Service 2<br/>(1% chance of &gt; 2s)"]
-        S3["Service 3<br/>(1% chance of &gt; 2s)"]
-        S4["Service 4<br/>(1% chance of &gt; 2s)"]
-        S5["Service 5<br/>(1% chance of &gt; 2s)"]
+        S1["Service 1<br/>(1% chance of over 2s)"]
+        S2["Service 2<br/>(1% chance of over 2s)"]
+        S3["Service 3<br/>(1% chance of over 2s)"]
+        S4["Service 4<br/>(1% chance of over 2s)"]
+        S5["Service 5<br/>(1% chance of over 2s)"]
     end
 
     S1 & S2 & S3 & S4 & S5 --> Aggregator{"Combined Result"}
-    Aggregator -->|"95.1% Probability"| FastResp["Fast Response (&lt; 100ms)"]
-    Aggregator -->|"4.9% Probability (1 in 20 requests!)"| SlowResp["Severe Latency Lag (&gt; 2,000ms)"]
+    Aggregator -->|"95.1% Probability"| FastResp["Fast Response (under 100ms)"]
+    Aggregator -->|"4.9% Probability (1 in 20 requests!)"| SlowResp["Severe Latency Lag (over 2,000ms)"]
 
     style SlowResp fill:#fee2e2,stroke:#dc2626,stroke-width:2px
     style FastResp fill:#dcfce7,stroke:#16a34a,stroke-width:1px
-```
-
-```text
-Client Request
-      │
-      ├────► Microservice 1 (p99 latency = 1% chance of taking > 2 seconds)
-      ├────► Microservice 2 (p99 latency = 1% chance of taking > 2 seconds)
-      ├────► Microservice 3 (p99 latency = 1% chance of taking > 2 seconds)
-      ├────► Microservice 4 (p99 latency = 1% chance of taking > 2 seconds)
-      └────► Microservice 5 (p99 latency = 1% chance of taking > 2 seconds)
 ```
 
 If each individual service has a 99th percentile ($p99$) latency of 2 seconds (meaning only 1 out of 100 requests takes > 2 seconds):
@@ -180,8 +150,11 @@ Total Client SLA Budget: 1,000ms
 * A single locked database table in a third-party vendor API will permanently hang your process until someone manually restarts the server.
 
 ### Mistake 2: Upstream Timeout Shorter Than Downstream Timeout
-```text
-[ Mobile App Timeout = 2.0s ] ─────────► [ Service A Timeout = 5.0s ] ─────────► [ Service B = 10.0s ]
+
+```mermaid
+flowchart LR
+    App["Mobile App\n(Timeout = 2.0s)"] -->|"HTTP Call"| SvcA["Service A\n(Timeout = 5.0s)"] -->|"HTTP Call"| SvcB["Service B\n(Timeout = 10.0s)"]
+    style App fill:#fee2e2,stroke:#dc2626
 ```
 * If Service B takes 4 seconds, the Mobile App gives up after 2.0s and disconnects.
 * But Service A continues waiting for 5.0s, and Service B continues crunching data for 10.0s.

@@ -29,13 +29,13 @@ stateDiagram-v2
         - Tracks success/failure metrics
     end note
 
-    OPEN --> OPEN: Reject traffic immediately (<5ms fallback)
+    OPEN --> OPEN: Reject traffic immediately (fast fallback)
     OPEN --> HALF_OPEN: Cooldown timer expires (e.g. 5.0s elapsed)
 
     note right of OPEN
         OPEN (Tripped):
         - ZERO network traffic to Service B
-        - Instant fallback (<5ms)
+        - Instant fallback (under 5ms)
         - Gives Service B time to recover
     end note
 
@@ -47,35 +47,6 @@ stateDiagram-v2
         - Tentatively allows 1 canary request
         - Evaluates if downstream is healthy
     end note
-```
-
-```text
- ┌────────────────────────────────────────────────────────────────────────┐
- │                      CIRCUIT BREAKER STATE MACHINE                     │
- └────────────────────────────────────────────────────────────────────────┘
-
-                 ┌─────────────────────────────┐
-                 │           CLOSED            │
-         ┌──────►│     (Normal Operation)      │◄─────┐
-         │       └──────────────┬──────────────┘      │
-         │                      │                     │
-         │             Failures exceed                │
-         │             Threshold (e.g. 5)             │
-         │                      │                     │
-         │                      ▼                     │
-         │       ┌─────────────────────────────┐      │
-         │       │            OPEN             │      │
-   Probe │       │   (Fast-Fail & Fallback)    │      │ Probe
- Succeeds│       └──────────────┬──────────────┘      │ Fails
-         │                      │                     │
-         │               Cooldown Timer               │
-         │               Expires (e.g. 5s)            │
-         │                      │                     │
-         │                      ▼                     │
-         │       ┌─────────────────────────────┐      │
-         └───────┤          HALF-OPEN          ├──────┘
-                 │     (Canary / Probe Test)   │
-                 └─────────────────────────────┘
 ```
 
 ---
@@ -128,23 +99,11 @@ When a circuit trips, your application must decide how to handle the customer. C
 
 Beginners often confuse these three patterns:
 
-```text
- ┌─────────────────────────────────────────────────────────────────────────┐
- │                   RESILIENCE PATTERNS COMPARISON                        │
- ├───────────────────┬─────────────────────────────────────────────────────┤
- │ Pattern           │ Primary Question / Purpose                          │
- ├───────────────────┼─────────────────────────────────────────────────────┤
- │ Circuit Breaker   │ "Is the DOWNSTREAM service healthy?"                │
- │                   │ Cuts traffic to prevent cascading failure.          │
- ├───────────────────┼─────────────────────────────────────────────────────┤
- │ Rate Limiter      │ "Is the UPSTREAM client sending too much traffic?"  │
- │                   │ Caps requests per second to protect self.           │
- ├───────────────────┼─────────────────────────────────────────────────────┤
- │ Bulkhead          │ "How do we isolate failure inside our own service?" │
- │                   │ Partitions thread/connection pools so one slow      │
- │                   │ endpoint doesn't starve other endpoints.            │
- └───────────────────┴─────────────────────────────────────────────────────┘
-```
+| Pattern | Primary Question / Purpose | Failure Mode Addressed |
+| :--- | :--- | :--- |
+| **Circuit Breaker** | "Is the DOWNSTREAM service healthy?" | Cuts traffic to prevent cascading failure from broken dependencies. |
+| **Rate Limiter** | "Is the UPSTREAM client sending too much traffic?" | Caps requests per second to protect self from traffic spikes. |
+| **Bulkhead** | "How do we isolate failure inside our own service?" | Partitions thread/connection pools so one slow endpoint doesn't starve others. |
 
 ---
 

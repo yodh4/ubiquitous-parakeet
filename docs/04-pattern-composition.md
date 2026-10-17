@@ -19,7 +19,7 @@ flowchart TD
     subgraph OnionModel ["The Onion Composition Architecture"]
         subgraph L1 ["Layer 1: Circuit Breaker (Outermost Guard)"]
             CBCheck{"Is Circuit OPEN?"}
-            FastFailResp["Return Instant Fallback\n(&lt; 5ms, Zero Network I/O)"]
+            FastFailResp["Return Instant Fallback\n(under 5ms, Zero Network I/O)"]
             CBCheck -->|"YES (Tripped)"| FastFailResp
             
             subgraph L2 ["Layer 2: Retry with Backoff & Jitter (Middle)"]
@@ -43,37 +43,6 @@ flowchart TD
     style FastFailResp fill:#fef3c7,stroke:#d97706
     style SocketCall fill:#e0e7ff,stroke:#4338ca
     style SuccessResp fill:#dcfce7,stroke:#16a34a
-```
-
-```text
- ┌────────────────────────────────────────────────────────────────────────┐
- │                      THE ONION COMPOSITION MODEL                       │
- └────────────────────────────────────────────────────────────────────────┘
-
-    Client Request
-          │
-          ▼
-   ┌────────────────────────────────────────────────────────┐
-   │ 1. CIRCUIT BREAKER (Outer Guard)                       │
-   │    Checks: "Is Service B healthy overall?"             │
-   │    If OPEN: ABORT IMMEDIATELY (return fallback <5ms)   │
-   │                                                        │
-   │    ┌──────────────────────────────────────────────┐    │
-   │    │ 2. RETRY + JITTER (Loop Coordinator)         │    │
-   │    │    Coordinates attempts 1, 2, 3...           │    │
-   │    │    Waits with randomized backoff if transient│    │
-   │    │                                              │    │
-   │    │    ┌────────────────────────────────────┐    │    │
-   │    │    │ 3. STRICT TIMEOUT (Inner Deadline) │    │    │
-   │    │    │    Enforces timeout PER ATTEMPT    │    │    │
-   │    │    │                                    │    │    │
-   │    │    │    ┌──────────────────────────┐    │    │    │
-   │    │    │    │ 4. HTTP NETWORK SOCKET   │    │    │    │
-   │    │    │    │    POST http://service-b │    │    │    │
-   │    │    │    └──────────────────────────┘    │    │    │
-   │    │    └────────────────────────────────────┘    │    │
-   │    └──────────────────────────────────────────────┘    │
-   └────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -126,19 +95,6 @@ sequenceDiagram
     deactivate A
 ```
 
-```text
-Client                Service A (CB: CLOSED)               Service B
-  │                             │                              │
-  ├─── POST /trigger ──────────►│                              │
-  │                             ├─── [CB Check: CLOSED (OK)]   │
-  │                             ├─── [Attempt 1: Timeout=500ms]│
-  │                             ├─── POST /work ──────────────►│
-  │                             │                              │ (Takes 40ms)
-  │                             │◄── HTTP 200 OK ──────────────┤
-  │                             ├─── [Record CB Success]       │
-  │◄── HTTP 200 (Success) ──────┤                              │
-```
-
 ---
 
 ### Scenario 2: Transient Blip (Recovered by Retry + Jitter)
@@ -178,22 +134,6 @@ sequenceDiagram
     deactivate A
 ```
 
-```text
-Client                Service A (CB: CLOSED)               Service B
-  │                             │                              │
-  ├─── POST /trigger ──────────►│                              │
-  │                             ├─── [Attempt 1: Timeout=500ms]│
-  │                             ├─── POST /work ──────────────►│
-  │                             │◄── HTTP 500 (Random Blip!) ──┤
-  │                             │                              │
-  │                             ├─── [Wait 120ms Full Jitter]  │
-  │                             │                              │
-  │                             ├─── [Attempt 2: Timeout=500ms]│
-  │                             ├─── POST /work ──────────────►│
-  │                             │◄── HTTP 200 OK (Recovered!) ─┤
-  │                             ├─── [Record CB Success]       │
-  │◄── HTTP 200 (Success) ──────┤                              │
-```
 * The client **never sees the error**. Availability is preserved seamlessly.
 
 ---
@@ -216,27 +156,12 @@ sequenceDiagram
     CB-->>A: False (Reject: in cooldown)
     
     Note over A,B: ZERO network packets sent to Service B!
-    Note over A: Generate fallback response in < 1ms
+    Note over A: Generate fallback response in under 1ms
     
     A-->>Client: HTTP 503 / Degraded Fallback (Total RTT: 2.1ms)
     deactivate A
 ```
 
-```text
-Client                Service A                            Service B (DOWN)
-  │                             │                                  │
-  │ [Requests 1 to 5 fail...]   │                                  │
-  │                             ├─── [5 Consecutive Failures!]     │
-  │                             ├─── [TRIP STATE: CLOSED -> OPEN]  │
-  │                             │                                  │
-  │ [Request 6 Arrives]         │                                  │
-  ├─── POST /trigger ──────────►│                                  │
-  │                             ├─── [CB Check: OPEN!]             │
-  │                             ├─── [SKIP NETWORK ENTIRELY]       │
-  │                             ├─── [Generate Fallback in 1ms]    │
-  │◄── HTTP 200/503 (Fallback) ─┤                                  │
-       (Took <3ms total!)
-```
 * **Acceptance Criteria Verified:** Service A responds in $<5\text{ms}$ with zero network load sent to Service B.
 
 ---
@@ -271,25 +196,6 @@ sequenceDiagram
     deactivate A
 ```
 
-```text
-Client                Service A (CB: OPEN)                 Service B (REBOOTED)
-  │                             │                                  │
-  │ [Cooldown 5.0s Passes...]   │                                  │
-  │                             │                                  │
-  │ [Incoming Probe Request]    │                                  │
-  ├─── POST /trigger ──────────►│                                  │
-  │                             ├─── [Cooldown Expired!]           │
-  │                             ├─── [STATE: OPEN -> HALF-OPEN]    │
-  │                             │                                  │
-  │                             ├─── [Dispatch 1 Canary Probe]     │
-  │                             ├─── POST /work ──────────────────►│
-  │                             │◄── HTTP 200 OK ──────────────────┤
-  │                             │                                  │
-  │                             ├─── [Canary Succeeded!]           │
-  │                             ├─── [STATE: HALF-OPEN -> CLOSED]  │
-  │                             ├─── [Reset Failure Counter = 0]   │
-  │◄── HTTP 200 (Success) ──────┤                                  │
-```
 * Normal full-speed operations automatically resume without human intervention.
 
 ---

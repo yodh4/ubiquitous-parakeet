@@ -38,17 +38,12 @@ sequenceDiagram
     Client->>ServiceA: POST /trigger
     activate ServiceA
     ServiceA->>ServiceB: TCP SYN / HTTP POST
-    ServiceB-->>ServiceA: TCP RST / ECONNREFUSED (&lt;1ms)
+    ServiceB-->>ServiceA: TCP RST / ECONNREFUSED (under 1ms)
     ServiceA-->>Client: 503 Service Unavailable (RTT: 1ms)
     deactivate ServiceA
     Note over ServiceA: Socket closed & memory freed immediately. Concurrency intact!
 ```
 
-```text
-Client ──► Service A ──(HTTP POST)──► Service B [PORT CLOSED]
-Client ◄── Service A ◄──(RST / 503 Immediate)──┘
-Duration: 1ms
-```
 * Service B immediately sends back a TCP `RST` packet or Service A gets an instant `ECONNREFUSED`.
 * Service A's thread/task is occupied for **less than 1 millisecond**.
 * Memory is freed, the socket is released, and Service A remains fully capable of serving other clients.
@@ -90,22 +85,6 @@ sequenceDiagram
     deactivate ServiceA
 ```
 
-```text
-Client ──► Service A ──(HTTP POST)──► Service B [HANGING / GC PAUSE]
-               │
-           [Thread A-1 Blocked Waiting]
-               │
-Client 2 ─► Service A ──(HTTP POST)──► Service B [HANGING]
-               │
-           [Thread A-2 Blocked Waiting]
-               │
-Client 3 ─► Service A ──(HTTP POST)──► Service B [HANGING]
-               │
-           [Thread A-3 Blocked Waiting]
-               ▼
-[All Worker Threads in Service A Exhausted!]
-Client 4 ─► Service A ──► [HTTP 504 / Connection Drop / Complete Crash]
-```
 * Service B accepts the TCP connection, but stalls (e.g. database lock, long Garbage Collection pause, CPU spike).
 * Every request to Service A holds an open socket, an allocated memory buffer, and an active worker task.
 * In seconds, Service A hits its concurrency limit. **Now Service A is dead too, even though Service A has zero bugs in its own code.**
@@ -128,40 +107,6 @@ flowchart TD
     style Step1 fill:#fef3c7,stroke:#d97706,stroke-width:1px
     style Step3 fill:#fee2e2,stroke:#dc2626,stroke-width:1px
     style Step6 fill:#b91c1c,stroke:#7f1d1d,stroke-width:2px,color:#fff
-```
-
-```text
- ┌────────────────────────────────────────────────────────────────────────┐
- │                      THE CASCADING FAILURE SPIRAL                      │
- └────────────────────────────────────────────────────────────────────────┘
-
- 1. Downstream Sits Under Heavy Load
-    Service B slows from 20ms to 2,000ms response time.
-                  │
-                  ▼
- 2. Upstream Queues Fill Up
-    Service A has incoming requests arriving at 100 req/sec.
-    Because each request now takes 2s instead of 0.02s,
-    concurrent in-flight requests skyrocket from 2 to 200.
-                  │
-                  ▼
- 3. Resource Starvation in Upstream
-    Service A runs out of file descriptors (sockets), memory buffers,
-    or event-loop execution capacity.
-                  │
-                  ▼
- 4. Upstream Health Checks Begin Failing
-    Load balancers and Kubernetes see Service A unresponsive.
-    They kill instances of Service A or mark them unhealthy.
-                  │
-                  ▼
- 5. Surviving Nodes Absorb Remaining Load
-    The remaining Service A nodes receive 2× the traffic,
-    exhausting their resources twice as fast.
-                  │
-                  ▼
- 6. Complete System Blackout
-    Entire platform goes dark.
 ```
 
 ---
