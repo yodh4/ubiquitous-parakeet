@@ -12,6 +12,39 @@ Getting the nesting order wrong is one of the most common distributed systems mi
 
 The three patterns must wrap the downstream network call like concentric layers of an onion:
 
+```mermaid
+flowchart TD
+    Req(["Client Request"]) --> L1
+
+    subgraph OnionModel ["The Onion Composition Architecture"]
+        subgraph L1 ["Layer 1: Circuit Breaker (Outermost Guard)"]
+            CBCheck{"Is Circuit OPEN?"}
+            FastFailResp["Return Instant Fallback\n(&lt; 5ms, Zero Network I/O)"]
+            CBCheck -->|"YES (Tripped)"| FastFailResp
+            
+            subgraph L2 ["Layer 2: Retry with Backoff & Jitter (Middle)"]
+                RetryCoordinator["Retry Coordinator (1..N attempts)"]
+                BackoffWait["Sleep with Exponential Backoff + Full Jitter"]
+                
+                subgraph L3 ["Layer 3: Strict Timeout (Innermost Guard)"]
+                    DeadlineTimer["Per-Attempt Timeout Deadline (e.g. 500ms)"]
+                    SocketCall["HTTP Socket POST /work"]
+                end
+            end
+        end
+    end
+
+    CBCheck -->|"NO (Closed/Half-Open)"| RetryCoordinator
+    RetryCoordinator --> DeadlineTimer --> SocketCall
+    SocketCall -->|"Transient Failure / Timeout"| BackoffWait --> RetryCoordinator
+    SocketCall -->|"HTTP 200 OK"| SuccessResp(["Return Success to Client"])
+    FastFailResp --> FailResp(["Return Degraded Fallback to Client"])
+
+    style FastFailResp fill:#fef3c7,stroke:#d97706
+    style SocketCall fill:#e0e7ff,stroke:#4338ca
+    style SuccessResp fill:#dcfce7,stroke:#16a34a
+```
+
 ```text
  ┌────────────────────────────────────────────────────────────────────────┐
  │                      THE ONION COMPOSITION MODEL                       │
@@ -66,6 +99,33 @@ The three patterns must wrap the downstream network call like concentric layers 
 ## 3. The 4 Operational Scenarios (Sequence Diagrams)
 
 ### Scenario 1: The Happy Path (Downstream is Healthy)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant A as Service A (Coordinator)
+    participant CB as Circuit Breaker (CLOSED)
+    participant Retry as Retry Coordinator
+    participant B as Service B (Worker)
+
+    Client->>A: POST /trigger
+    activate A
+    A->>CB: can_execute()?
+    CB-->>A: True (Allowed)
+    A->>Retry: execute_with_retry()
+    activate Retry
+    Retry->>B: Attempt 1 (POST /work, timeout=500ms)
+    activate B
+    B-->>Retry: HTTP 200 OK (took 40ms)
+    deactivate B
+    Retry-->>A: WorkResponse(status="completed")
+    deactivate Retry
+    A->>CB: record_success()
+    A-->>Client: HTTP 200 OK (Total RTT: 42ms)
+    deactivate A
+```
+
 ```text
 Client                Service A (CB: CLOSED)               Service B
   │                             │                              │
@@ -82,6 +142,42 @@ Client                Service A (CB: CLOSED)               Service B
 ---
 
 ### Scenario 2: Transient Blip (Recovered by Retry + Jitter)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant A as Service A (Coordinator)
+    participant CB as Circuit Breaker (CLOSED)
+    participant Retry as Retry Coordinator
+    participant B as Service B (Worker)
+
+    Client->>A: POST /trigger
+    activate A
+    A->>CB: can_execute()?
+    CB-->>A: True (Allowed)
+    A->>Retry: execute_with_retry()
+    activate Retry
+    
+    Retry->>B: Attempt 1: POST /work (timeout=500ms)
+    activate B
+    B-->>Retry: HTTP 500 (Random Transient Blip)
+    deactivate B
+    
+    Note over Retry: Transient error caught!<br/>Sleep 120ms (Exponential Backoff + Full Jitter)
+    
+    Retry->>B: Attempt 2: POST /work (timeout=500ms)
+    activate B
+    B-->>Retry: HTTP 200 OK (Worker healed!)
+    deactivate B
+    Retry-->>A: WorkResponse(status="completed")
+    deactivate Retry
+    
+    A->>CB: record_success()
+    A-->>Client: HTTP 200 OK (Transparent recovery to client!)
+    deactivate A
+```
+
 ```text
 Client                Service A (CB: CLOSED)               Service B
   │                             │                              │
@@ -103,6 +199,29 @@ Client                Service A (CB: CLOSED)               Service B
 ---
 
 ### Scenario 3: Sustained Outage (Breaker Trips $\rightarrow$ Fast Fallback)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant A as Service A (Coordinator)
+    participant CB as Circuit Breaker (State: OPEN)
+    participant B as Service B (Down / Unresponsive)
+
+    Note over CB: 5 consecutive failures reached.<br/>Circuit is OPEN!
+
+    Client->>A: POST /trigger (Request #6)
+    activate A
+    A->>CB: can_execute()?
+    CB-->>A: False (Reject: in cooldown)
+    
+    Note over A,B: ZERO network packets sent to Service B!
+    Note over A: Generate fallback response in < 1ms
+    
+    A-->>Client: HTTP 503 / Degraded Fallback (Total RTT: 2.1ms)
+    deactivate A
+```
+
 ```text
 Client                Service A                            Service B (DOWN)
   │                             │                                  │
@@ -123,6 +242,35 @@ Client                Service A                            Service B (DOWN)
 ---
 
 ### Scenario 4: Self-Healing Recovery (HALF-OPEN Probe)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant A as Service A (Coordinator)
+    participant CB as Circuit Breaker
+    participant B as Service B (Rebooted & Healthy)
+
+    Note over CB: Cooldown timer (5.0s) expires.
+    
+    Client->>A: POST /trigger (Incoming Canary)
+    activate A
+    A->>CB: can_execute()?
+    Note over CB: State transition: OPEN -> HALF-OPEN<br/>Permits exactly 1 probe request
+    CB-->>A: True (Probe Allowed)
+    
+    A->>B: Probe Attempt: POST /work
+    activate B
+    B-->>A: HTTP 200 OK
+    deactivate B
+    
+    A->>CB: record_success()
+    Note over CB: State transition: HALF-OPEN -> CLOSED<br/>Failure counter reset to 0
+    
+    A-->>Client: HTTP 200 OK (System fully self-healed!)
+    deactivate A
+```
+
 ```text
 Client                Service A (CB: OPEN)                 Service B (REBOOTED)
   │                             │                                  │

@@ -24,6 +24,34 @@ This guide covers the theory, mechanics, mathematical models, architectural trad
 
 In Milestone 2, we introduce three complementary layers of defense into **Service A (Ingress / Coordinator)** to protect it against instabilities in **Service B (Worker)**:
 
+```mermaid
+flowchart TD
+    Client(["Incoming Client Request"]) --> CB
+
+    subgraph ServiceA ["Service A (Ingress / Coordinator)"]
+        subgraph Layer1 ["1. Circuit Breaker (Outer Guard)"]
+            CB{"Circuit State?"}
+            FastFail["Fast Degraded Fallback\n(&lt; 5ms, Zero Network I/O)"]
+            CB -->|"OPEN (Tripped)"| FastFail
+        end
+
+        subgraph Layer2 ["2. Retry + Jitter (Middle Coordinator)"]
+            RetryCoord["Retry Engine\n(Exponential Backoff + Full Jitter)"]
+        end
+
+        subgraph Layer3 ["3. Strict Timeout (Inner Guard)"]
+            TimeoutExec["Per-Attempt Deadline\n(Connect + Read Timeouts)"]
+        end
+
+        CB -->|"CLOSED or HALF-OPEN"| RetryCoord
+        RetryCoord -->|"Per Attempt"| TimeoutExec
+    end
+
+    TimeoutExec -->|"HTTP POST /work"| ServiceB[("Service B\nWorker Node")]
+    FastFail -->|"Immediate Fallback"| Client
+    ServiceB -.->|"Success or Failure"| TimeoutExec
+```
+
 ```text
                                   Incoming Client Request
                                              │

@@ -10,6 +10,38 @@ The **Retry** pattern automatically re-attempts failed operations to increase ov
 
 Never retry blindly. You must strictly distinguish between **transient (retryable)** and **permanent (non-retryable)** failures.
 
+```mermaid
+flowchart TD
+    Err(["Incoming Network Failure / HTTP Error"]) --> Check{"Is Error Transient?"}
+
+    Check -->|"YES: Downstream may self-heal"| TransientBranch["Transient (Retryable)"]
+    Check -->|"NO: Request is defective"| PermanentBranch["Permanent (Non-Retryable)"]
+
+    subgraph TransientExamples ["Retryable Failures"]
+        direction TB
+        T1["HTTP 503 Service Unavailable"]
+        T2["HTTP 504 Gateway Timeout"]
+        T3["HTTP 429 Too Many Requests (with backoff)"]
+        T4["Socket Read Timeout"]
+        T5["TCP Connection Reset (ECONNRESET)"]
+    end
+
+    subgraph PermanentExamples ["Non-Retryable Failures"]
+        direction TB
+        P1["HTTP 400 Bad Request (Invalid JSON)"]
+        P2["HTTP 401 Unauthorized / 403 Forbidden"]
+        P3["HTTP 404 Not Found"]
+        P4["HTTP 422 Unprocessable Entity"]
+        P5["Application Logic / Syntax Error"]
+    end
+
+    TransientBranch --> TransientExamples --> ActionRetry["Schedule Retry with Exponential Backoff + Jitter"]
+    PermanentBranch --> PermanentExamples --> ActionFail["Fail Fast to Client Immediately"]
+
+    style ActionRetry fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style ActionFail fill:#fee2e2,stroke:#dc2626,stroke-width:2px
+```
+
 ```text
                                 Incoming Failure
                                        │
@@ -36,6 +68,29 @@ Never retry blindly. You must strictly distinguish between **transient (retryabl
 ## 2. The Danger of Naive Retries: The "Retry Storm"
 
 Consider a downstream service (Service B) that experiences a momentary traffic spike and begins dropping 20% of its requests:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Clients as 1,000 Upstream Clients
+    participant ServiceB as Service B (Under Heavy Load)
+
+    Clients->>ServiceB: Wave 1: 1,000 Concurrent Requests
+    Note over ServiceB: Service B CPU at 95%
+    ServiceB-->>Clients: Drops 200 requests with HTTP 503
+    Note over Clients: Naive Retries: 200 clients all wait exactly 100ms...
+
+    Note over Clients,ServiceB: At T = 100ms: Synchronized Wave Hits!
+    Clients->>ServiceB: 200 Retries + 1,000 New Requests = 1,200 Requests
+    Note over ServiceB: Service B CPU at 100%, queue overflows!
+    ServiceB-->>Clients: Drops 500 requests with HTTP 503
+    Note over Clients: 500 clients all wait exactly 100ms...
+
+    Note over Clients,ServiceB: At T = 200ms: Massive Wave Hits!
+    Clients->>ServiceB: 500 Retries + 1,000 New Requests = 1,500 Requests
+    Note over ServiceB: Service B crashes completely (OOM / Connection Refused)
+    ServiceB--x Clients: TOTAL CASCADING OUTAGE
+```
 
 ```text
                                THE RETRY STORM SCENARIO
@@ -102,6 +157,31 @@ Even with exponential backoff, if 500 clients all fail at timestamp $T=0$, they 
 To break this harmonic lockstep, we introduce **Jitter** (random noise).
 
 ### Visual Comparison of Traffic Waves
+
+```mermaid
+flowchart TD
+    subgraph WithoutJitter ["Without Jitter: Synchronized Spikes (Harmonic Resonance)"]
+        direction LR
+        NJ0["T=0ms<br/>500 Failures"] -->|"All wait exactly 100ms"| NJ1["T=100ms<br/>500 RETRY SPIKE"]
+        NJ1 -->|"All wait exactly 200ms"| NJ2["T=300ms<br/>500 RETRY SPIKE"]
+        NJ2 -->|"All wait exactly 400ms"| NJ3["T=700ms<br/>500 RETRY SPIKE"]
+    end
+
+    subgraph WithJitter ["With Full Jitter: Uniformly Dispersed Traffic"]
+        direction LR
+        WJ0["T=0ms<br/>500 Failures"] --> Spread["sleep = random(0, base * 2^n)"]
+        Spread --> R1["Client A (14ms)"]
+        Spread --> R2["Client B (47ms)"]
+        Spread --> R3["Client C (89ms)"]
+        Spread --> R4["Client D (132ms)"]
+        Spread --> R5["Client N (198ms)"]
+    end
+
+    style NJ1 fill:#fee2e2,stroke:#dc2626
+    style NJ2 fill:#fee2e2,stroke:#dc2626
+    style NJ3 fill:#fee2e2,stroke:#dc2626
+    style WithJitter fill:#dcfce7,stroke:#16a34a
+```
 
 ```text
 Without Jitter (Synchronized Traffic Spikes):

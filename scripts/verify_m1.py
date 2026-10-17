@@ -82,6 +82,9 @@ async def main():
             print("Tip: Make sure `docker compose up` or local uvicorn is running.")
             sys.exit(1)
 
+        # Reset breaker before baseline run
+        await client.post(f"{base_url}/circuit-breaker/reset")
+
         # 1. Baseline: 50ms latency, 0% failure
         await run_scenario(
             client,
@@ -102,6 +105,9 @@ async def main():
             count=2,
         )
 
+        # Reset breaker before guaranteed failure run
+        await client.post(f"{base_url}/circuit-breaker/reset")
+
         # 3. Guaranteed Downstream Failure: 100% failure rate
         await run_scenario(
             client,
@@ -111,6 +117,9 @@ async def main():
             failure_rate_pct=100.0,
             count=3,
         )
+
+        # Reset breaker before probabilistic distribution run
+        await client.post(f"{base_url}/circuit-breaker/reset")
 
         # 4. Probabilistic Failure: 50% failure rate across 10 requests
         results = await run_scenario(

@@ -16,6 +16,39 @@ The Circuit Breaker wraps network calls and automatically **cuts off network tra
 
 The Circuit Breaker operates as a state machine with three distinct states:
 
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED: Service Boot
+
+    CLOSED --> CLOSED: Request Succeeds (resets failure count)
+    CLOSED --> OPEN: Consecutive Failures >= Threshold (e.g. 5)
+
+    note right of CLOSED
+        CLOSED (Normal):
+        - All requests routed downstream
+        - Tracks success/failure metrics
+    end note
+
+    OPEN --> OPEN: Reject traffic immediately (<5ms fallback)
+    OPEN --> HALF_OPEN: Cooldown timer expires (e.g. 5.0s elapsed)
+
+    note right of OPEN
+        OPEN (Tripped):
+        - ZERO network traffic to Service B
+        - Instant fallback (<5ms)
+        - Gives Service B time to recover
+    end note
+
+    HALF_OPEN --> CLOSED: Canary probe SUCCEEDS (Service B recovered)
+    HALF_OPEN --> OPEN: Canary probe FAILS (Service B still broken)
+
+    note right of HALF_OPEN
+        HALF-OPEN (Probe):
+        - Tentatively allows 1 canary request
+        - Evaluates if downstream is healthy
+    end note
+```
+
 ```text
  ┌────────────────────────────────────────────────────────────────────────┐
  │                      CIRCUIT BREAKER STATE MACHINE                     │

@@ -27,6 +27,23 @@ A common intuition among software engineers is that an outright crash (HTTP 500 
 Here is why:
 
 ### Case A: Downstream Service B is DEAD (Immediate Fast-Fail)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant ServiceA as Service A (Coordinator)
+    participant ServiceB as Service B (Dead)
+
+    Client->>ServiceA: POST /trigger
+    activate ServiceA
+    ServiceA->>ServiceB: TCP SYN / HTTP POST
+    ServiceB-->>ServiceA: TCP RST / ECONNREFUSED (&lt;1ms)
+    ServiceA-->>Client: 503 Service Unavailable (RTT: 1ms)
+    deactivate ServiceA
+    Note over ServiceA: Socket closed & memory freed immediately. Concurrency intact!
+```
+
 ```text
 Client ──► Service A ──(HTTP POST)──► Service B [PORT CLOSED]
 Client ◄── Service A ◄──(RST / 503 Immediate)──┘
@@ -37,6 +54,42 @@ Duration: 1ms
 * Memory is freed, the socket is released, and Service A remains fully capable of serving other clients.
 
 ### Case B: Downstream Service B is SLOW (The Silent Killer)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C1 as Client 1
+    actor C2 as Client 2
+    actor C3 as Client 3
+    actor C4 as Client 4 (New)
+    participant ServiceA as Service A (Coordinator)
+    participant ServiceB as Service B (Hanging / Stalled)
+
+    C1->>ServiceA: POST /trigger
+    activate ServiceA
+    ServiceA->>ServiceB: HTTP POST (Waiting...)
+    Note over ServiceA: Socket 1 & Task 1 held in memory
+
+    C2->>ServiceA: POST /trigger
+    activate ServiceA
+    ServiceA->>ServiceB: HTTP POST (Waiting...)
+    Note over ServiceA: Socket 2 & Task 2 held in memory
+
+    C3->>ServiceA: POST /trigger
+    activate ServiceA
+    ServiceA->>ServiceB: HTTP POST (Waiting...)
+    Note over ServiceA: Socket 3 & Task 3 held in memory
+
+    Note over ServiceA: All worker capacity / connection pools exhausted!
+
+    C4-x ServiceA: Connection Dropped / 504 Timeout
+    Note over C4,ServiceA: Service A is now down, even with zero bugs in its own code!
+
+    deactivate ServiceA
+    deactivate ServiceA
+    deactivate ServiceA
+```
+
 ```text
 Client ──► Service A ──(HTTP POST)──► Service B [HANGING / GC PAUSE]
                │
@@ -62,6 +115,20 @@ Client 4 ─► Service A ──► [HTTP 504 / Connection Drop / Complete Crash
 ## 3. The Cascading Failure Death Spiral
 
 A **Cascading Failure** occurs when a fault in one low-level service propagates upstream, causing successive failures in caller services until the entire platform collapses.
+
+```mermaid
+flowchart TD
+    Step1["1. Downstream Sits Under Heavy Load<br/>Service B slows from 20ms to 2,000ms"] 
+    --> Step2["2. Upstream Queues Fill Up<br/>Concurrent in-flight requests in Service A surge from 2 to 200"]
+    --> Step3["3. Resource Starvation in Upstream<br/>Service A runs out of sockets, memory buffers, or pool slots"]
+    --> Step4["4. Health Checks Begin Failing<br/>Load balancers and orchestrators kill unresponsive Service A nodes"]
+    --> Step5["5. Surviving Nodes Absorb Remaining Load<br/>Surviving nodes receive 2x traffic and exhaust resources twice as fast"]
+    --> Step6["6. Complete System Blackout<br/>Entire distributed cluster goes dark"]
+
+    style Step1 fill:#fef3c7,stroke:#d97706,stroke-width:1px
+    style Step3 fill:#fee2e2,stroke:#dc2626,stroke-width:1px
+    style Step6 fill:#b91c1c,stroke:#7f1d1d,stroke-width:2px,color:#fff
+```
 
 ```text
  ┌────────────────────────────────────────────────────────────────────────┐

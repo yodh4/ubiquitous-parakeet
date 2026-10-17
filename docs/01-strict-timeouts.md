@@ -10,6 +10,44 @@ Timeouts are the most fundamental, non-negotiable resilience pattern in distribu
 
 When Service A calls Service B over HTTP, the request does not happen in a single step. It undergoes distinct networking phases, each with its own failure characteristics:
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Service A (Client)
+    participant DNS as DNS Server
+    participant Server as Service B (Server)
+
+    rect rgb(240, 249, 255)
+        Note over Client,DNS: DNS Resolution
+        Client->>DNS: Resolve "service-b" hostname
+        DNS-->>Client: IP: 172.20.0.3
+    end
+
+    rect rgb(254, 243, 199)
+        Note over Client,Server: Connect Phase (Connect Timeout Scope: e.g. 1.0s)
+        Client->>Server: TCP SYN
+        Server-->>Client: TCP SYN-ACK
+        Client->>Server: TCP ACK
+        opt TLS Handshake (if HTTPS)
+            Client->>Server: TLS ClientHello
+            Server-->>Client: ServerHello, Certificate, Key Exchange
+            Client->>Server: Finished
+        end
+    end
+
+    rect rgb(243, 232, 255)
+        Note over Client,Server: Write Phase (Write Timeout Scope: e.g. 1.0s)
+        Client->>Server: Send Request Headers & Body
+    end
+
+    rect rgb(254, 226, 226)
+        Note over Server: Server Computation (Simulated Latency / DB Query)
+        Note over Client,Server: Read Phase (Read Timeout Scope: e.g. 3.0s)
+        Server-->>Client: First Response Byte (Headers)
+        Server-->>Client: Stream Response Body (Chunks)
+    end
+```
+
 ```text
 Service A (Client)                                          Service B (Server)
    │                                                               │
@@ -57,6 +95,30 @@ Why does a small amount of latency in downstream services create catastrophic de
 
 ### The Math of Compounding Latency
 Imagine Service A receives a request and must call **5 downstream microservices** in sequence (or in parallel) to assemble the response:
+
+```mermaid
+flowchart TD
+    Client(["Client Request to Service A"]) --> S1
+    Client --> S2
+    Client --> S3
+    Client --> S4
+    Client --> S5
+
+    subgraph Microservices ["Downstream Services (Each has 99% fast SLA, p99 = 2.0s)"]
+        S1["Service 1<br/>(1% chance of &gt; 2s)"]
+        S2["Service 2<br/>(1% chance of &gt; 2s)"]
+        S3["Service 3<br/>(1% chance of &gt; 2s)"]
+        S4["Service 4<br/>(1% chance of &gt; 2s)"]
+        S5["Service 5<br/>(1% chance of &gt; 2s)"]
+    end
+
+    S1 & S2 & S3 & S4 & S5 --> Aggregator{"Combined Result"}
+    Aggregator -->|"95.1% Probability"| FastResp["Fast Response (&lt; 100ms)"]
+    Aggregator -->|"4.9% Probability (1 in 20 requests!)"| SlowResp["Severe Latency Lag (&gt; 2,000ms)"]
+
+    style SlowResp fill:#fee2e2,stroke:#dc2626,stroke-width:2px
+    style FastResp fill:#dcfce7,stroke:#16a34a,stroke-width:1px
+```
 
 ```text
 Client Request
