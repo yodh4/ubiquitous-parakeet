@@ -8,10 +8,12 @@ A minimalist, two-service distributed system designed strictly to explore, test,
 .
 ├── prd.md                    # Product Requirements Document
 ├── docker-compose.yml        # Multi-container orchestration (Service A, B, RabbitMQ)
+├── pyproject.toml            # Root workspace definition
 ├── services/
 │   ├── service-a/            # Ingress / Producer (FastAPI)
 │   │   ├── Dockerfile
-│   │   ├── requirements.txt
+│   │   ├── pyproject.toml
+│   │   ├── uv.lock
 │   │   └── app/
 │   │       ├── __init__.py
 │   │       ├── config.py
@@ -19,7 +21,8 @@ A minimalist, two-service distributed system designed strictly to explore, test,
 │   │       └── schemas.py
 │   └── service-b/            # Worker / Consumer (FastAPI)
 │       ├── Dockerfile
-│       ├── requirements.txt
+│       ├── pyproject.toml
+│       ├── uv.lock
 │       └── app/
 │           ├── __init__.py
 │           ├── config.py
@@ -39,10 +42,8 @@ docker compose up --build
 
 ### 2. Run Locally (Development)
 ```bash
-# Set up virtual environment
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r services/service-a/requirements.txt -r services/service-b/requirements.txt
+# Sync workspace environment
+uv sync
 
 # Run Service B (Port 8001)
 PYTHONPATH=services/service-b uvicorn app.main:app --port 8001 --reload
