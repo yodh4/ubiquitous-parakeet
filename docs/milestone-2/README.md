@@ -17,7 +17,8 @@ This guide covers the theory, mechanics, mathematical models, architectural trad
 | **02** | [Retries, Backoff & Jitter](./02-retries-backoff-jitter.md) | Transient vs Permanent errors, Retry Storms, Exponential Backoff, Full vs Decorrelated Jitter algorithms, and Idempotency risks. |
 | **03** | [The Circuit Breaker Pattern](./03-circuit-breaker.md) | The 3-state Finite State Machine (Closed/Open/Half-Open), Rolling Windows, Fallback Strategies, and Self-Healing. |
 | **04** | [Pattern Composition & Architecture](./04-pattern-composition.md) | How Timeouts, Retries, and Circuit Breakers nest together; the request lifecycle; and execution order. |
-| **Standards** | [Documentation Rules](./DOCUMENTATION_RULES.md) | Quality standards, contrast rules, Mermaid conventions, and things to avoid when writing docs. |
+| **05** | [Implementation & Verification Guide](./05-implementation-guide.md) | Production implementation details, resilience package architecture, API payloads, testing commands, and verification results. |
+| **Standards** | [Documentation Rules](../DOCUMENTATION_RULES.md) | Quality standards, contrast rules, Mermaid conventions, and things to avoid when writing docs. |
 
 ---
 

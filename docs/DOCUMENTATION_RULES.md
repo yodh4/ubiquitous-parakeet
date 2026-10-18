@@ -6,17 +6,19 @@ To ensure all documentation in this project remains accessible, visually consist
 
 ## 🚫 What MUST BE AVOIDED (Anti-Patterns)
 
-### 1. NEVER Hardcode Light Background Fills in Diagrams
-* **The Mistake:** Using inline styles like `style Node fill:#fee2e2` (light red) or `style Node fill:#fef3c7` (light yellow).
-* **Why it breaks:** Most modern code editors (VS Code, Cursor, Obsidian, GitHub Dark Theme) render diagram text as **white or off-white** in dark mode. Placing white text on top of a light pastel background drops the contrast ratio below 1.2:1, making the text **completely invisible / unreadable**.
-* **The Rule:** **Do not set `fill` colors on nodes.** Instead, use border coloring (`stroke`) and `stroke-width`:
-  ```mermaid
-  %% ❌ WRONG (Unreadable in dark mode):
-  %% style FastNode fill:#dcfce7,stroke:#16a34a
+### 1. NEVER Hardcode Light Background Fills Without Explicit High-Contrast Text
+* **The Mistake:** Using inline styles like `style Node fill:#fee2e2` (light red) or `style Node fill:#fef3c7` (light yellow) without specifying text color.
+* **Why it breaks:** Most modern code editors (VS Code, Cursor, Obsidian, GitHub Dark Theme) render diagram text as **white or off-white** in dark mode. Placing white text on top of an unconfigured light pastel background drops the contrast ratio below 1.2:1, making the text **completely invisible / unreadable**.
+* **The Rule:** 
+  * Default to border-only styling (`stroke:#...`, `stroke-width:2px`) where the card background and text adapt automatically to the user's theme.
+  * When distinct solid fills are required (e.g. distinguishing architectural tiers or layers), **ALWAYS explicitly specify a dark background fill with white text**:
+    ```mermaid
+    %% ❌ WRONG (Unreadable white-on-light in dark mode):
+    %% style Layer1 fill:#fef3c7,stroke:#d97706
 
-  %% ✅ CORRECT (High-contrast in BOTH Light & Dark modes):
-  %% style FastNode stroke:#16a34a,stroke-width:2px
-  ```
+    %% ✅ CORRECT (High-contrast white text on dark saturated fill):
+    %% style Layer1 fill:#78350f,stroke:#f59e0b,stroke-width:3px,color:#ffffff
+    ```
 
 ---
 
@@ -27,10 +29,10 @@ To ensure all documentation in this project remains accessible, visually consist
 
 ---
 
-### 3. NEVER Apply `fill` Styling to Subgraphs
-* **The Mistake:** `style SubgraphName fill:#dcfce7`.
-* **Why it breaks:** Subgraph fills wash out the background for all child elements within the subgraph, causing all nested labels to lose contrast in dark mode.
-* **The Rule:** If you must style a subgraph container, only style its border: `style SubgraphName stroke:#16a34a,stroke-width:2px`.
+### 3. NEVER Leave Multi-Layer Subgraphs Without Distinctive Color Styling
+* **The Mistake:** Nesting subgraphs without distinct styling so that all layers blend together into identical gray outlines.
+* **Why it hurts:** Readers cannot visually distinguish the boundaries between outer, middle, and inner layers.
+* **The Rule:** Give each layer in a multi-tiered architecture a distinct color identity (e.g., Layer 1 Amber, Layer 2 Blue, Layer 3 Purple). Ensure each styled layer defines an explicit border and high-contrast text color (`color:#ffffff`).
 
 ---
 

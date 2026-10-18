@@ -17,16 +17,16 @@ flowchart TD
     Req(["Client Request"]) --> L1
 
     subgraph OnionModel ["The Onion Composition Architecture"]
-        subgraph L1 ["Layer 1: Circuit Breaker (Outermost Guard)"]
+        subgraph L1 ["🛡️ Layer 1: Circuit Breaker (Outermost Guard - Amber)"]
             CBCheck{"Is Circuit OPEN?"}
             FastFailResp["Return Instant Fallback\n(under 5ms, Zero Network I/O)"]
             CBCheck -->|"YES (Tripped)"| FastFailResp
             
-            subgraph L2 ["Layer 2: Retry with Backoff & Jitter (Middle)"]
+            subgraph L2 ["🔄 Layer 2: Retry with Backoff & Jitter (Middle Coordinator - Blue)"]
                 RetryCoordinator["Retry Coordinator (1..N attempts)"]
                 BackoffWait["Sleep with Exponential Backoff + Full Jitter"]
                 
-                subgraph L3 ["Layer 3: Strict Timeout (Innermost Guard)"]
+                subgraph L3 ["⏱️ Layer 3: Strict Timeout (Innermost Guard - Purple)"]
                     DeadlineTimer["Per-Attempt Timeout Deadline (e.g. 500ms)"]
                     SocketCall["HTTP Socket POST /work"]
                 end
@@ -40,9 +40,23 @@ flowchart TD
     SocketCall -->|"HTTP 200 OK"| SuccessResp(["Return Success to Client"])
     FastFailResp --> FailResp(["Return Degraded Fallback to Client"])
 
-    style FastFailResp stroke:#d97706,stroke-width:2px
-    style SocketCall stroke:#4338ca,stroke-width:2px
-    style SuccessResp stroke:#16a34a,stroke-width:2px
+    %% Layer Subgraph Styling (Distinct Colors)
+    style L1 fill:#78350f,stroke:#f59e0b,stroke-width:3px,color:#ffffff
+    style L2 fill:#1e3a8a,stroke:#3b82f6,stroke-width:3px,color:#ffffff
+    style L3 fill:#4c1d95,stroke:#8b5cf6,stroke-width:3px,color:#ffffff
+
+    %% Inner Node Styling
+    style CBCheck fill:#92400e,stroke:#fbbf24,stroke-width:2px,color:#ffffff
+    style FastFailResp fill:#b45309,stroke:#fcd34d,stroke-width:2px,color:#ffffff
+    style RetryCoordinator fill:#1d4ed8,stroke:#60a5fa,stroke-width:2px,color:#ffffff
+    style BackoffWait fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    style DeadlineTimer fill:#6d28d9,stroke:#a78bfa,stroke-width:2px,color:#ffffff
+    style SocketCall fill:#7c3aed,stroke:#c4b5fd,stroke-width:2px,color:#ffffff
+
+    %% Terminal Nodes
+    style Req fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#ffffff
+    style SuccessResp fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#ffffff
+    style FailResp fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#ffffff
 ```
 
 ---
