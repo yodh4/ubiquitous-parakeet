@@ -17,35 +17,27 @@ sequenceDiagram
     participant DNS as DNS Server
     participant Server as Service B (Server)
 
-    rect rgb(240, 249, 255)
-        Note over Client,DNS: DNS Resolution
-        Client->>DNS: Resolve "service-b" hostname
-        DNS-->>Client: IP: 172.20.0.3
+    Note over Client,DNS: 1. DNS Resolution Phase
+    Client->>DNS: Resolve "service-b" hostname
+    DNS-->>Client: IP: 172.20.0.3
+
+    Note over Client,Server: 2. Connect Phase (Connect Timeout Scope: e.g. 1.0s)
+    Client->>Server: TCP SYN
+    Server-->>Client: TCP SYN-ACK
+    Client->>Server: TCP ACK
+    opt TLS Handshake (if HTTPS)
+        Client->>Server: TLS ClientHello
+        Server-->>Client: ServerHello, Certificate, Key Exchange
+        Client->>Server: Finished
     end
 
-    rect rgb(254, 243, 199)
-        Note over Client,Server: Connect Phase (Connect Timeout Scope: e.g. 1.0s)
-        Client->>Server: TCP SYN
-        Server-->>Client: TCP SYN-ACK
-        Client->>Server: TCP ACK
-        opt TLS Handshake (if HTTPS)
-            Client->>Server: TLS ClientHello
-            Server-->>Client: ServerHello, Certificate, Key Exchange
-            Client->>Server: Finished
-        end
-    end
+    Note over Client,Server: 3. Write Phase (Write Timeout Scope: e.g. 1.0s)
+    Client->>Server: Send Request Headers & Body
 
-    rect rgb(243, 232, 255)
-        Note over Client,Server: Write Phase (Write Timeout Scope: e.g. 1.0s)
-        Client->>Server: Send Request Headers & Body
-    end
-
-    rect rgb(254, 226, 226)
-        Note over Server: Server Computation (Simulated Latency / DB Query)
-        Note over Client,Server: Read Phase (Read Timeout Scope: e.g. 3.0s)
-        Server-->>Client: First Response Byte (Headers)
-        Server-->>Client: Stream Response Body (Chunks)
-    end
+    Note over Server: Server Computation (Simulated Latency / DB Query)
+    Note over Client,Server: 4. Read Phase (Read Timeout Scope: e.g. 3.0s)
+    Server-->>Client: First Response Byte (Headers)
+    Server-->>Client: Stream Response Body (Chunks)
 ```
 
 ### The 4 Distinct Timeout Types in `httpx`:
@@ -96,8 +88,8 @@ flowchart TD
     Aggregator -->|"95.1% Probability"| FastResp["Fast Response (under 100ms)"]
     Aggregator -->|"4.9% Probability (1 in 20 requests!)"| SlowResp["Severe Latency Lag (over 2,000ms)"]
 
-    style SlowResp fill:#fee2e2,stroke:#dc2626,stroke-width:2px
-    style FastResp fill:#dcfce7,stroke:#16a34a,stroke-width:1px
+    style SlowResp stroke:#dc2626,stroke-width:2px
+    style FastResp stroke:#16a34a,stroke-width:2px
 ```
 
 If each individual service has a 99th percentile ($p99$) latency of 2 seconds (meaning only 1 out of 100 requests takes > 2 seconds):
@@ -154,7 +146,7 @@ Total Client SLA Budget: 1,000ms
 ```mermaid
 flowchart LR
     App["Mobile App\n(Timeout = 2.0s)"] -->|"HTTP Call"| SvcA["Service A\n(Timeout = 5.0s)"] -->|"HTTP Call"| SvcB["Service B\n(Timeout = 10.0s)"]
-    style App fill:#fee2e2,stroke:#dc2626
+    style App stroke:#dc2626,stroke-width:2px
 ```
 * If Service B takes 4 seconds, the Mobile App gives up after 2.0s and disconnects.
 * But Service A continues waiting for 5.0s, and Service B continues crunching data for 10.0s.

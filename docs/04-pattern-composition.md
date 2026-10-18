@@ -40,9 +40,9 @@ flowchart TD
     SocketCall -->|"HTTP 200 OK"| SuccessResp(["Return Success to Client"])
     FastFailResp --> FailResp(["Return Degraded Fallback to Client"])
 
-    style FastFailResp fill:#fef3c7,stroke:#d97706
-    style SocketCall fill:#e0e7ff,stroke:#4338ca
-    style SuccessResp fill:#dcfce7,stroke:#16a34a
+    style FastFailResp stroke:#d97706,stroke-width:2px
+    style SocketCall stroke:#4338ca,stroke-width:2px
+    style SuccessResp stroke:#16a34a,stroke-width:2px
 ```
 
 ---

@@ -38,8 +38,8 @@ flowchart TD
     TransientBranch --> TransientExamples --> ActionRetry["Schedule Retry with Exponential Backoff + Jitter"]
     PermanentBranch --> PermanentExamples --> ActionFail["Fail Fast to Client Immediately"]
 
-    style ActionRetry fill:#dcfce7,stroke:#16a34a,stroke-width:2px
-    style ActionFail fill:#fee2e2,stroke:#dc2626,stroke-width:2px
+    style ActionRetry stroke:#16a34a,stroke-width:2px
+    style ActionFail stroke:#dc2626,stroke-width:2px
 ```
 
 ### The Rule:
@@ -138,10 +138,10 @@ flowchart TD
         Spread --> R5["Client N (198ms)"]
     end
 
-    style NJ1 fill:#fee2e2,stroke:#dc2626
-    style NJ2 fill:#fee2e2,stroke:#dc2626
-    style NJ3 fill:#fee2e2,stroke:#dc2626
-    style WithJitter fill:#dcfce7,stroke:#16a34a
+    style NJ1 stroke:#dc2626,stroke-width:2px
+    style NJ2 stroke:#dc2626,stroke-width:2px
+    style NJ3 stroke:#dc2626,stroke-width:2px
+    style WithJitter stroke:#16a34a,stroke-width:2px
 ```
 
 ### The Three Jitter Algorithms (AWS Architecture Paper)
