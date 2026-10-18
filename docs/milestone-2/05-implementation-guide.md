@@ -191,7 +191,7 @@ When Service B is completely down, unconstrained retries waste network bandwidth
 stateDiagram-v2
     [*] --> CLOSED: Initial Startup
 
-    CLOSED --> OPEN: Consecutive Failures >= failure_threshold (3)
+    CLOSED --> OPEN: Consecutive Failures reach Threshold (3)
     note right of CLOSED
       Healthy traffic passes through.
       Single success resets failure count to 0.

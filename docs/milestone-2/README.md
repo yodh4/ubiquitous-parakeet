@@ -31,17 +31,17 @@ flowchart TD
     Client(["Incoming Client Request"]) --> CB
 
     subgraph ServiceA ["Service A (Ingress / Coordinator)"]
-        subgraph Layer1 ["1. Circuit Breaker (Outer Guard)"]
+        subgraph Layer1 ["🛡️ Layer 1: Circuit Breaker (Outer Guard - Amber)"]
             CB{"Circuit State?"}
             FastFail["Fast Degraded Fallback\n(under 5ms, Zero Network I/O)"]
             CB -->|"OPEN (Tripped)"| FastFail
         end
 
-        subgraph Layer2 ["2. Retry + Jitter (Middle Coordinator)"]
+        subgraph Layer2 ["🔄 Layer 2: Retry + Jitter (Middle Coordinator - Blue)"]
             RetryCoord["Retry Engine\n(Exponential Backoff + Full Jitter)"]
         end
 
-        subgraph Layer3 ["3. Strict Timeout (Inner Guard)"]
+        subgraph Layer3 ["⏱️ Layer 3: Strict Timeout (Inner Guard - Purple)"]
             TimeoutExec["Per-Attempt Deadline\n(Connect + Read Timeouts)"]
         end
 
@@ -52,6 +52,21 @@ flowchart TD
     TimeoutExec -->|"HTTP POST /work"| ServiceB[("Service B\nWorker Node")]
     FastFail -->|"Immediate Fallback"| Client
     ServiceB -.->|"Success or Failure"| TimeoutExec
+
+    %% Distinct Layer Subgraph Fills and Borders
+    style Layer1 fill:#78350f,stroke:#f59e0b,stroke-width:3px,color:#ffffff
+    style Layer2 fill:#1e3a8a,stroke:#3b82f6,stroke-width:3px,color:#ffffff
+    style Layer3 fill:#4c1d95,stroke:#8b5cf6,stroke-width:3px,color:#ffffff
+
+    %% Inner Component Nodes
+    style CB fill:#92400e,stroke:#fbbf24,stroke-width:2px,color:#ffffff
+    style FastFail fill:#b45309,stroke:#fcd34d,stroke-width:2px,color:#ffffff
+    style RetryCoord fill:#1d4ed8,stroke:#60a5fa,stroke-width:2px,color:#ffffff
+    style TimeoutExec fill:#6d28d9,stroke:#a78bfa,stroke-width:2px,color:#ffffff
+
+    %% External Nodes
+    style Client fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#ffffff
+    style ServiceB fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#ffffff
 ```
 
 ---

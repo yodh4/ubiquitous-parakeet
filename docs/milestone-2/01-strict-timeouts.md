@@ -88,8 +88,12 @@ flowchart TD
     Aggregator -->|"95.1% Probability"| FastResp["Fast Response (under 100ms)"]
     Aggregator -->|"4.9% Probability (1 in 20 requests!)"| SlowResp["Severe Latency Lag (over 2,000ms)"]
 
-    style SlowResp stroke:#dc2626,stroke-width:2px
-    style FastResp stroke:#16a34a,stroke-width:2px
+    %% Node and Subgraph Styling
+    style Microservices fill:#1e293b,stroke:#475569,stroke-width:2px,color:#ffffff
+    style FastResp fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff
+    style SlowResp fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#ffffff
+    style Client fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#ffffff
+    style Aggregator fill:#0f172a,stroke:#64748b,stroke-width:2px,color:#ffffff
 ```
 
 If each individual service has a 99th percentile ($p99$) latency of 2 seconds (meaning only 1 out of 100 requests takes > 2 seconds):
@@ -146,7 +150,9 @@ Total Client SLA Budget: 1,000ms
 ```mermaid
 flowchart LR
     App["Mobile App\n(Timeout = 2.0s)"] -->|"HTTP Call"| SvcA["Service A\n(Timeout = 5.0s)"] -->|"HTTP Call"| SvcB["Service B\n(Timeout = 10.0s)"]
-    style App stroke:#dc2626,stroke-width:2px
+    style App fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#ffffff
+    style SvcA fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#ffffff
+    style SvcB fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#ffffff
 ```
 * If Service B takes 4 seconds, the Mobile App gives up after 2.0s and disconnects.
 * But Service A continues waiting for 5.0s, and Service B continues crunching data for 10.0s.

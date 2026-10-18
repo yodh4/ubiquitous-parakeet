@@ -38,8 +38,17 @@ flowchart TD
     TransientBranch --> TransientExamples --> ActionRetry["Schedule Retry with Exponential Backoff + Jitter"]
     PermanentBranch --> PermanentExamples --> ActionFail["Fail Fast to Client Immediately"]
 
-    style ActionRetry stroke:#16a34a,stroke-width:2px
-    style ActionFail stroke:#dc2626,stroke-width:2px
+    %% Group and Branch Styling
+    style TransientBranch fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff
+    style TransientExamples fill:#022c22,stroke:#059669,stroke-width:2px,color:#ffffff
+    style ActionRetry fill:#047857,stroke:#34d399,stroke-width:2px,color:#ffffff
+
+    style PermanentBranch fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#ffffff
+    style PermanentExamples fill:#450a0a,stroke:#dc2626,stroke-width:2px,color:#ffffff
+    style ActionFail fill:#991b1b,stroke:#f87171,stroke-width:2px,color:#ffffff
+
+    style Err fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#ffffff
+    style Check fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#ffffff
 ```
 
 ### The Rule:
@@ -138,10 +147,17 @@ flowchart TD
         Spread --> R5["Client N (198ms)"]
     end
 
-    style NJ1 stroke:#dc2626,stroke-width:2px
-    style NJ2 stroke:#dc2626,stroke-width:2px
-    style NJ3 stroke:#dc2626,stroke-width:2px
-    style WithJitter stroke:#16a34a,stroke-width:2px
+    %% Subgraph Styling
+    style WithoutJitter fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#ffffff
+    style WithJitter fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff
+
+    %% Spike Nodes
+    style NJ1 fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#ffffff
+    style NJ2 fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#ffffff
+    style NJ3 fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#ffffff
+
+    %% Smooth Nodes
+    style Spread fill:#047857,stroke:#34d399,stroke-width:2px,color:#ffffff
 ```
 
 ### The Three Jitter Algorithms (AWS Architecture Paper)

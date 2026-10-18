@@ -104,9 +104,13 @@ flowchart TD
     --> Step5["5. Surviving Nodes Absorb Remaining Load<br/>Surviving nodes receive 2x traffic and exhaust resources twice as fast"]
     --> Step6["6. Complete System Blackout<br/>Entire distributed cluster goes dark"]
 
-    style Step1 stroke:#d97706,stroke-width:2px
-    style Step3 stroke:#dc2626,stroke-width:2px
-    style Step6 stroke:#b91c1c,stroke-width:3px
+    %% Progressive Severity Gradient (Amber -> Orange -> Red -> Blackout Maroon)
+    style Step1 fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#ffffff
+    style Step2 fill:#854d0e,stroke:#eab308,stroke-width:2px,color:#ffffff
+    style Step3 fill:#9a3412,stroke:#f97316,stroke-width:2px,color:#ffffff
+    style Step4 fill:#991b1b,stroke:#ef4444,stroke-width:2px,color:#ffffff
+    style Step5 fill:#7f1d1d,stroke:#dc2626,stroke-width:2px,color:#ffffff
+    style Step6 fill:#450a0a,stroke:#b91c1c,stroke-width:3px,color:#ffffff
 ```
 
 ---

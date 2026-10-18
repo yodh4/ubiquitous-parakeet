@@ -21,7 +21,7 @@ stateDiagram-v2
     [*] --> CLOSED: Service Boot
 
     CLOSED --> CLOSED: Request Succeeds (resets failure count)
-    CLOSED --> OPEN: Consecutive Failures >= Threshold (e.g. 5)
+    CLOSED --> OPEN: Consecutive Failures reach Threshold (e.g. 5)
 
     note right of CLOSED
         CLOSED (Normal):
