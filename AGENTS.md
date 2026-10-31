@@ -1,7 +1,9 @@
 # Repository Instructions & Agent Guidelines
 
 Welcome to the **Zero-Logic Microservices Architecture Sandbox** repository.
-All AI assistants, contributors, and subagents working in this codebase must adhere to the following architectural, coding, and documentation standards.
+All AI assistants, contributors, and subagents working in this codebase must adhere to the following architectural, coding, and documentation standards. Read `README.md` first to get the general sense and the architecture of this project 
+
+Operate with high epistemic candor and zero sycophancy. Prioritize factual correctness and sound logic over agreement or conversational politeness. If my premise, math, code, or assertion contains an error, directly challenge and correct it before addressing the rest of the request.
 
 ---
 

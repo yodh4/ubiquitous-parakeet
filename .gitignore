@@ -47,3 +47,6 @@ htmlcov/
 *.swp
 *.swo
 .DS_Store
+
+.agents/
+.claude/

@@ -14,28 +14,27 @@ Because messages can and will be delivered more than once, consumer services mus
 flowchart TD
     subgraph AtMostOnce ["1. At-Most-Once (Best Effort)"]
         direction TB
-        AMO1["Broker sends message to Worker"]
-        AMO2["Broker deletes message IMMEDIATELY (auto-ack)"]
-        AMO3["Worker crashes before processing"]
-        AMO4["Result: Message is LOST FOREVER"]
+        AMO1["Broker sends message to Worker"] --> AMO2["Broker deletes message IMMEDIATELY (auto-ack)"]
+        AMO2 --> AMO3["Worker crashes before processing"]
+        AMO3 --> AMO4["Result: Message is LOST FOREVER"]
     end
 
     subgraph AtLeastOnce ["2. At-Least-Once (Industry Standard)"]
         direction TB
-        ALO1["Broker sends message to Worker"]
-        ALO2["Worker executes task successfully"]
-        ALO3["Network blip drops the ACK packet on the wire"]
-        ALO4["Broker re-delivers to another Worker"]
-        ALO5["Result: Zero data loss, but DUPLICATES OCCUR"]
+        ALO1["Broker sends message to Worker"] --> ALO2["Worker executes task successfully"]
+        ALO2 --> ALO3["Network blip drops the ACK packet on the wire"]
+        ALO3 --> ALO4["Broker re-delivers to another Worker"]
+        ALO4 --> ALO5["Result: Zero data loss, but DUPLICATES OCCUR"]
     end
 
     subgraph ExactlyOnceEffect ["3. Exactly-Once Effect (At-Least-Once + Idempotency)"]
         direction TB
-        EO1["Duplicate message arrives at Worker"]
-        EO2["Worker checks unique Request ID in Deduplication Store"]
-        EO3["Worker skips work and sends ACK immediately"]
-        EO4["Result: Exactly-Once business effect!"]
+        EO1["Duplicate message arrives at Worker"] --> EO2["Worker checks unique Request ID in Deduplication Store"]
+        EO2 --> EO3["Worker skips work and sends ACK immediately"]
+        EO3 --> EO4["Result: Exactly-Once business effect!"]
     end
+
+    AtMostOnce ~~~ AtLeastOnce ~~~ ExactlyOnceEffect
 
     %% High-Contrast Subgraph Styling
     style AtMostOnce fill:#450a0a,stroke:#dc2626,stroke-width:2px,color:#ffffff
