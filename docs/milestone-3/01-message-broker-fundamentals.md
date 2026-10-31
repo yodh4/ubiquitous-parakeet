@@ -67,12 +67,20 @@ flowchart TD
         T_Ex -->|"Binding: 'order.#'"| T_Q2["All Orders Queue"]
     end
 
-    DirectEx ~~~ FanoutEx ~~~ TopicEx
+    subgraph HeadersEx ["4. Headers Exchange (Header Attributes Match)"]
+        direction LR
+        H_Msg["Msg (headers: format='pdf', type='report')"] --> H_Ex["Headers Exchange"]
+        H_Ex -->|"Binding: format='pdf', type='report'<br/>(x-match='all')"| H_Q1["PDF Reports Queue"]
+        H_Ex -.->|"Binding: format='zip'<br/>(x-match='all')"| H_Q2["ZIP Queue (Ignored)"]
+    end
+
+    DirectEx ~~~ FanoutEx ~~~ TopicEx ~~~ HeadersEx
 
     %% High-Contrast Subgraph Styling
     style DirectEx fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#ffffff
     style FanoutEx fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#ffffff
     style TopicEx fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#ffffff
+    style HeadersEx fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff
 ```
 
 ### Summary of Exchange Types:
