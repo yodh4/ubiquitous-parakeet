@@ -23,3 +23,15 @@ class WorkResponse(BaseModel):
     hostname: str
     simulated_latency_ms: int
     completed_at: datetime
+
+
+class ConsumerStatsResponse(BaseModel):
+    service: str = "service-b"
+    is_running: bool
+    prefetch_count: int
+    total_received: int
+    total_completed: int
+    total_failed: int
+    active_in_flight: int
+    last_processed_id: str | None = None
+    last_error: str | None = None
