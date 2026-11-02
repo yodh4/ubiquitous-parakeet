@@ -10,6 +10,7 @@ services:
       - SERVICE_A_PORT=8000
       - SERVICE_A_SERVICE_B_URL=http://service-b:8001
       - SERVICE_A_REQUEST_TIMEOUT_SECONDS=5.0
+      - SERVICE_A_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     networks:
       - sandbox-net
     depends_on:
@@ -24,6 +25,7 @@ services:
       - "8001:8001"
     environment:
       - SERVICE_B_PORT=8001
+      - SERVICE_B_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     networks:
       - sandbox-net
 

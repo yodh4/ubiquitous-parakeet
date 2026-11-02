@@ -2,6 +2,8 @@
 
 A minimalist, two-service distributed system designed strictly to explore, test, and observe microservices architecture and system design principles without business logic distractions.
 
+> 📖 **Returning to the project?** Read the [System Architecture & Component Overview](docs/ARCHITECTURE_OVERVIEW.md) for a complete high-level snapshot of components, ports, flows, and milestone status.
+
 ## Project Structure
 
 ```text

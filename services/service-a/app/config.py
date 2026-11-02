@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     cb_failure_threshold: int = 3
     cb_recovery_timeout_seconds: float = 5.0
 
+    # RabbitMQ Broker Configuration (Milestone 3)
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5673/"
+    rabbitmq_exchange_name: str = "sandbox.exchange"
+    rabbitmq_routing_key: str = "task.work"
+
     model_config = SettingsConfigDict(
         env_prefix="SERVICE_A_",
         env_file=".env",
