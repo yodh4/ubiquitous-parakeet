@@ -17,6 +17,8 @@ In Milestone 3, we transition from synchronous RPC to **Event-Driven Asynchronou
 | **02** | [Delivery Guarantees & Idempotency](./02-delivery-guarantees-and-idempotency.md) | At-Most-Once vs At-Least-Once delivery, why duplicate deliveries occur, and implementing the Idempotent Consumer pattern for exactly-once effects. |
 | **03** | [Dead Letter Queues & Poison Messages](./03-dead-letter-queues-and-poison-messages.md) | Poison pills, infinite retry crash loops, Dead Letter Exchanges (DLX), Dead Letter Queues (DLQ), and manual/automated remediation. |
 | **04** | [Async Architecture & Message Lifecycle](./04-async-architecture-and-message-lifecycle.md) | End-to-end request lifecycle, sequence diagrams for all operational scenarios, and implementation design using `aio-pika`. |
+| **05** | [Broker Infrastructure & Connection Mechanics](./05-broker-infrastructure-and-connection-mechanics.md) | Data plane vs control plane, AMQP URI anatomy, Docker bridge vs host networking, and producer/consumer configuration asymmetry. |
+| **Plan** | [Implementation Roadmap](./IMPLEMENTATION_PLAN.md) | 7-step guided implementation plan from dependencies to end-to-end verification. |
 | **Standards** | [Documentation Rules](../DOCUMENTATION_RULES.md) | Quality standards, contrast rules, Mermaid conventions, and pre-commit checklists. |
 
 ---
