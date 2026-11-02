@@ -57,3 +57,23 @@ class CircuitBreakerStatusResponse(BaseModel):
 class CircuitBreakerResetResponse(BaseModel):
     status: str = "reset"
     circuit_breaker: CircuitBreakerStatusResponse
+
+
+# Milestone 3 Asynchronous Schemas
+class EnqueueRequest(BaseModel):
+    latency_ms: int = Field(default=0, ge=0, le=60000, description="Downstream simulated latency in ms")
+    failure_rate_pct: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Downstream simulated failure rate (0.0% to 100.0%)"
+    )
+    request_id: str | None = Field(
+        default=None, description="Optional caller-supplied request ID for idempotency testing"
+    )
+
+
+class EnqueueResponse(BaseModel):
+    status: str = "accepted"
+    request_id: str
+    exchange: str
+    routing_key: str
+    enqueued_at: datetime
+    message: str = "Task accepted for asynchronous processing"

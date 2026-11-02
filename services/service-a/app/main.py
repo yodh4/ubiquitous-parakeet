@@ -5,11 +5,13 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+import aio_pika
 import httpx
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.messaging.publisher import MessagePublisher
 from app.resilience import (
     CircuitBreaker,
     CircuitBreakerOpenException,
@@ -19,6 +21,8 @@ from app.resilience import (
 from app.schemas import (
     CircuitBreakerResetResponse,
     CircuitBreakerStatusResponse,
+    EnqueueRequest,
+    EnqueueResponse,
     HealthResponse,
     ResilienceMetadata,
     TriggerRequest,
@@ -38,9 +42,20 @@ async def lifespan(app: FastAPI):
         failure_threshold=settings.cb_failure_threshold,
         recovery_timeout_seconds=settings.cb_recovery_timeout_seconds,
     )
+    # Setup shared AMQP MessagePublisher (Milestone 3)
+    publisher = MessagePublisher(rabbitmq_url=settings.rabbitmq_url)
+    try:
+        await publisher.connect()
+        app.state.publisher = publisher
+    except (aio_pika.exceptions.AMQPException, OSError) as exc:
+        logger.warning("Could not connect to RabbitMQ on startup: %s. Continuing in degraded mode.", exc)
+        app.state.publisher = None
+
     yield
-    # Clean up client on shutdown
+    # Clean up resources on shutdown
     await app.state.http_client.aclose()
+    if app.state.publisher:
+        await app.state.publisher.close()
 
 
 app = FastAPI(
@@ -55,6 +70,7 @@ app.state.circuit_breaker = CircuitBreaker(
     failure_threshold=settings.cb_failure_threshold,
     recovery_timeout_seconds=settings.cb_recovery_timeout_seconds,
 )
+app.state.publisher = None
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -73,6 +89,54 @@ async def reset_circuit_breaker(request: Request):
     cb: CircuitBreaker = request.app.state.circuit_breaker
     await cb.reset()
     return CircuitBreakerResetResponse(circuit_breaker=CircuitBreakerStatusResponse(**cb.get_status()))
+
+
+@app.post(
+    "/enqueue",
+    response_model=EnqueueResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Enqueue task asynchronously (FR-3.1)",
+    description="Publishes a workload task to RabbitMQ with DeliveryMode.PERSISTENT and returns immediately.",
+)
+async def enqueue_work(payload: EnqueueRequest, request: Request):
+    publisher: MessagePublisher | None = getattr(request.app.state, "publisher", None)
+
+    # Lazy-init or fallback connection if not yet connected
+    if publisher is None or publisher.channel is None or publisher.channel.is_closed:
+        try:
+            publisher = MessagePublisher(rabbitmq_url=settings.rabbitmq_url)
+            await publisher.connect()
+            request.app.state.publisher = publisher
+        except (aio_pika.exceptions.AMQPException, OSError) as exc:
+            logger.error("Failed to connect to RabbitMQ broker: %s", exc)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"error": "MessageBrokerUnavailable", "message": f"Could not connect to RabbitMQ: {exc}"},
+            )
+
+    request_id = payload.request_id or str(uuid.uuid4())
+
+    try:
+        await publisher.publish_task(
+            request_id=request_id,
+            latency_ms=payload.latency_ms,
+            failure_rate_pct=payload.failure_rate_pct,
+        )
+    except (aio_pika.exceptions.AMQPException, RuntimeError, OSError) as exc:
+        logger.error("Failed to publish task to RabbitMQ: %s", exc)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": "PublishFailed", "message": f"Failed to publish message: {exc}"},
+        )
+
+    return EnqueueResponse(
+        status="accepted",
+        request_id=request_id,
+        exchange=settings.rabbitmq_exchange_name,
+        routing_key=settings.rabbitmq_routing_key,
+        enqueued_at=datetime.now(UTC),
+    )
+
 
 
 @app.post(
