@@ -14,6 +14,7 @@ from aio_pika.abc import (
 )
 
 from app.config import settings
+from app.messaging.idempotency import IdempotencyStore
 from app.messaging.topology import setup_topology
 
 logger = logging.getLogger("service-b.consumer")
@@ -36,9 +37,15 @@ class TaskConsumer:
         self.total_received: int = 0
         self.total_completed: int = 0
         self.total_failed: int = 0
+        self.total_duplicates_skipped: int = 0
         self.active_in_flight: int = 0
         self.last_processed_id: str | None = None
         self.last_error: str | None = None
+
+        self.idempotency_store = IdempotencyStore(
+            default_ttl_seconds=settings.idempotency_ttl_seconds,
+            max_capacity=settings.idempotency_max_capacity,
+        )
 
         self._lock = asyncio.Lock()
 
@@ -97,27 +104,47 @@ class TaskConsumer:
                 self.active_in_flight,
             )
 
-            # 1. Simulate artificial latency if specified
-            if latency_ms > 0:
-                await asyncio.sleep(latency_ms / 1000.0)
+            # Step 1: Atomic Idempotency Check & In-Flight Lease Acquisition (FR-3.3)
+            acquired = await self.idempotency_store.check_and_acquire(request_id)
+            if not acquired:
+                logger.warning(
+                    "Duplicate message id=%s detected (in-flight or completed). Suppressing work and ACK-ing.",
+                    request_id,
+                )
+                await message.ack()
+                async with self._lock:
+                    self.total_duplicates_skipped += 1
+                    self.active_in_flight -= 1
+                return
 
-            # 2. Simulate probabilistic failure if specified
-            if failure_rate_pct > 0:
-                roll = random.uniform(0.0, 100.0)
-                if roll < failure_rate_pct:
-                    raise RuntimeError(
-                        f"Simulated consumer failure (roll={roll:.2f} < threshold={failure_rate_pct:.2f})"
-                    )
+            try:
+                # Step 2: Simulate artificial latency if specified
+                if latency_ms > 0:
+                    await asyncio.sleep(latency_ms / 1000.0)
 
-            # Work completed successfully -> Send manual ACK (removes task from queue)
-            await message.ack()
+                # Step 3: Simulate probabilistic failure if specified
+                if failure_rate_pct > 0:
+                    roll = random.uniform(0.0, 100.0)
+                    if roll < failure_rate_pct:
+                        raise RuntimeError(
+                            f"Simulated consumer failure (roll={roll:.2f} < threshold={failure_rate_pct:.2f})"
+                        )
 
-            async with self._lock:
-                self.total_completed += 1
-                self.last_processed_id = request_id
-                self.active_in_flight -= 1
+                # Step 4: Mark COMPLETED in deduplication store and send manual ACK
+                await self.idempotency_store.mark_completed(request_id)
+                await message.ack()
 
-            logger.info("Successfully completed and ACKed task id=%s", request_id)
+                async with self._lock:
+                    self.total_completed += 1
+                    self.last_processed_id = request_id
+                    self.active_in_flight -= 1
+
+                logger.info("Successfully completed and ACKed task id=%s", request_id)
+
+            except Exception:
+                # Release in-flight lease on failure so redelivery or DLQ tracking is unblocked
+                await self.idempotency_store.release_in_flight(request_id)
+                raise
 
         except Exception as exc:  # noqa: BLE001 - Worker catch-all to guarantee unhandled task crashes are NACKed to DLQ rather than dropped
             # Unhandled or simulated error -> Send manual NACK without requeue
@@ -142,6 +169,7 @@ class TaskConsumer:
             "total_received": self.total_received,
             "total_completed": self.total_completed,
             "total_failed": self.total_failed,
+            "total_duplicates_skipped": self.total_duplicates_skipped,
             "active_in_flight": self.active_in_flight,
             "last_processed_id": self.last_processed_id,
             "last_error": self.last_error,

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     rabbitmq_dlx_name: str = "sandbox.dlx"
     rabbitmq_dlq_name: str = "sandbox.tasks.dlq"
     rabbitmq_prefetch_count: int = 5
+    idempotency_ttl_seconds: int = 300
+    idempotency_max_capacity: int = 10000
 
     model_config = SettingsConfigDict(
         env_prefix="SERVICE_B_",
