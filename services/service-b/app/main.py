@@ -93,6 +93,13 @@ async def purge_dlq_messages(request: Request):
     }
 
 
+@app.post("/consumer/reset")
+async def reset_consumer_state(request: Request):
+    consumer: TaskConsumer = request.app.state.consumer
+    await consumer.reset()
+    return {"status": "reset", "service": settings.service_name}
+
+
 @app.post("/work", response_model=WorkResponse, status_code=status.HTTP_200_OK)
 async def perform_work(payload: WorkRequest):
     logger.info(

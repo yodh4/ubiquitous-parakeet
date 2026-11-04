@@ -176,13 +176,13 @@ class TaskConsumer:
         }
 
     async def get_dlq_message_count(self) -> int:
-        """Queries RabbitMQ directly over AMQP wire for the current count of quarantined poison messages."""
+        """Queries RabbitMQ directly for the current count of quarantined poison messages."""
         if not self.channel or self.channel.is_closed:
             return 0
         try:
-            # Bypass RobustChannel local cache to query live broker state via passive queue declare
-            res = await self.channel.channel.queue_declare(settings.rabbitmq_dlq_name, passive=True)
-            return int(res.message_count)
+            dlq = await self.channel.declare_queue(settings.rabbitmq_dlq_name, durable=True)
+            await dlq.declare()
+            return int(dlq.declaration_result.message_count)
         except (aio_pika.exceptions.AMQPException, OSError) as exc:
             logger.warning("Could not query DLQ message count: %s", exc)
             return 0
@@ -192,8 +192,21 @@ class TaskConsumer:
         if not self.channel or self.channel.is_closed:
             return 0
         try:
-            res = await self.channel.channel.queue_purge(settings.rabbitmq_dlq_name)
-            return int(res.message_count)
+            dlq = await self.channel.declare_queue(settings.rabbitmq_dlq_name, durable=True)
+            result = await dlq.purge()
+            return int(result.message_count)
         except (aio_pika.exceptions.AMQPException, OSError) as exc:
             logger.warning("Could not purge DLQ: %s", exc)
             return 0
+
+    async def reset(self) -> None:
+        """Resets telemetry counters and clears idempotency store (useful for test resets)."""
+        async with self._lock:
+            self.total_received = 0
+            self.total_completed = 0
+            self.total_failed = 0
+            self.total_duplicates_skipped = 0
+            self.active_in_flight = 0
+            self.last_processed_id = None
+            self.last_error = None
+        await self.idempotency_store.clear()
