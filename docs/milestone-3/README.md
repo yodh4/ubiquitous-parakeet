@@ -20,6 +20,7 @@ In Milestone 3, we transition from synchronous RPC to **Event-Driven Asynchronou
 | **05** | [Broker Infrastructure & Connection Mechanics](./05-broker-infrastructure-and-connection-mechanics.md) | Data plane vs control plane, AMQP URI anatomy, Docker bridge vs host networking, and producer/consumer configuration asymmetry. |
 | **Q&A-1** | [Step 1 Q&A Record](./qa-step-1-broker-infrastructure.md) | Verbatim plain Q&A record of initial step 1 questions, user answers, and follow-up architectural explorations. |
 | **Q&A-4-5** | [Step 4 & 5 Q&A Record](./qa-step-4-and-5-consumer-idempotency.md) | Verbatim plain Q&A record of consumer backpressure, ACK timing, idempotency, and TTL sliding windows. |
+| **Q&A-6** | [Step 6 Q&A Record](./qa-step-6-poison-messages-and-dlq.md) | Verbatim plain Q&A record of poison pill crash loops, DLX routing, isolation, and remediation. |
 | **Plan** | [Implementation Roadmap](./IMPLEMENTATION_PLAN.md) | 7-step guided implementation plan from dependencies to end-to-end verification. |
 | **Standards** | [Documentation Rules](../DOCUMENTATION_RULES.md) | Quality standards, contrast rules, Mermaid conventions, and pre-commit checklists. |
 

@@ -10,7 +10,13 @@ from fastapi import FastAPI, HTTPException, Request, status
 
 from app.config import settings
 from app.messaging.consumer import TaskConsumer
-from app.schemas import ConsumerStatsResponse, HealthResponse, WorkRequest, WorkResponse
+from app.schemas import (
+    ConsumerStatsResponse,
+    DLQStatusResponse,
+    HealthResponse,
+    WorkRequest,
+    WorkResponse,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(settings.service_name)
@@ -60,7 +66,31 @@ async def health_check():
 @app.get("/consumer/stats", response_model=ConsumerStatsResponse)
 async def get_consumer_stats(request: Request):
     consumer: TaskConsumer = request.app.state.consumer
-    return ConsumerStatsResponse(**consumer.get_stats())
+    stats = consumer.get_stats()
+    stats["dlq_message_count"] = await consumer.get_dlq_message_count()
+    return ConsumerStatsResponse(**stats)
+
+
+@app.get("/consumer/dlq", response_model=DLQStatusResponse)
+async def get_dlq_status(request: Request):
+    consumer: TaskConsumer = request.app.state.consumer
+    count = await consumer.get_dlq_message_count()
+    return DLQStatusResponse(
+        queue=settings.rabbitmq_dlq_name,
+        exchange=settings.rabbitmq_dlx_name,
+        message_count=count,
+    )
+
+
+@app.post("/consumer/dlq/purge")
+async def purge_dlq_messages(request: Request):
+    consumer: TaskConsumer = request.app.state.consumer
+    purged_count = await consumer.purge_dlq()
+    return {
+        "status": "purged",
+        "queue": settings.rabbitmq_dlq_name,
+        "purged_count": purged_count,
+    }
 
 
 @app.post("/work", response_model=WorkResponse, status_code=status.HTTP_200_OK)

@@ -34,5 +34,13 @@ class ConsumerStatsResponse(BaseModel):
     total_failed: int
     total_duplicates_skipped: int = 0
     active_in_flight: int
+    dlq_message_count: int = 0
     last_processed_id: str | None = None
     last_error: str | None = None
+
+
+class DLQStatusResponse(BaseModel):
+    queue: str
+    exchange: str
+    message_count: int
+

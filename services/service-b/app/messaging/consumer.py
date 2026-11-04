@@ -174,3 +174,26 @@ class TaskConsumer:
             "last_processed_id": self.last_processed_id,
             "last_error": self.last_error,
         }
+
+    async def get_dlq_message_count(self) -> int:
+        """Queries RabbitMQ directly over AMQP wire for the current count of quarantined poison messages."""
+        if not self.channel or self.channel.is_closed:
+            return 0
+        try:
+            # Bypass RobustChannel local cache to query live broker state via passive queue declare
+            res = await self.channel.channel.queue_declare(settings.rabbitmq_dlq_name, passive=True)
+            return int(res.message_count)
+        except (aio_pika.exceptions.AMQPException, OSError) as exc:
+            logger.warning("Could not query DLQ message count: %s", exc)
+            return 0
+
+    async def purge_dlq(self) -> int:
+        """Purges all messages from the Dead Letter Queue (useful for test resets)."""
+        if not self.channel or self.channel.is_closed:
+            return 0
+        try:
+            res = await self.channel.channel.queue_purge(settings.rabbitmq_dlq_name)
+            return int(res.message_count)
+        except (aio_pika.exceptions.AMQPException, OSError) as exc:
+            logger.warning("Could not purge DLQ: %s", exc)
+            return 0
