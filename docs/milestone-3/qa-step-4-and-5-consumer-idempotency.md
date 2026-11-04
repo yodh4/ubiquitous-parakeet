@@ -120,3 +120,60 @@ The answer identifies the core trade-off between **Data Loss (Under-processing)*
      UPDATE accounts SET balance = balance - 50;
      -- If the worker crashes anywhere, the entire transaction rolls back!
      ```
+
+---
+
+## 3. End-to-End Sequence Diagram (Step 5 State)
+
+This diagram visualizes the complete lifecycle of a request entering Service A and progressing through RabbitMQ, the backpressure queue, and Service B's in-flight locking and TTL deduplication:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as External Client
+    participant A as Service A (Ingress)
+    participant Ex as RabbitMQ Exchange<br/>(sandbox.exchange)
+    participant Q as RabbitMQ Queue<br/>(sandbox.tasks.work)
+    participant B as Service B (Consumer)
+    participant Store as Idempotency Store<br/>(In-Flight + TTL)
+
+    Note over Client,A: Phase 1: Fast Asynchronous Ingestion (Under 10ms)
+    Client->>A: POST /enqueue {"request_id": "req-101", "latency_ms": 1000}
+    activate A
+    Note over A: 1. Assign or validate request_id<br/>2. Package persistent AMQP message envelope
+    A->>Ex: Publish message (delivery_mode=PERSISTENT, key="task.work")
+    Ex->>Q: Route and buffer message into queue
+    A-->>Client: HTTP 202 Accepted {"status": "accepted", "request_id": "req-101"}
+    deactivate A
+    Note over Client: Client interaction finishes in under 10ms!
+
+    Note over Q,Store: Phase 2: First-Time Delivery & Background Execution
+    Q->>B: Push Task (request_id="req-101", controlled by prefetch=5)
+    activate B
+    B->>Store: check_and_acquire("req-101")
+    activate Store
+    Store-->>B: True (New task: Acquired IN-FLIGHT lock)
+    deactivate Store
+    Note over B: Execute simulated workload (sleep 1,000ms)
+    B->>Store: mark_completed("req-101", TTL=300s)
+    activate Store
+    Store-->>B: Recorded as COMPLETED
+    deactivate Store
+    B->>Q: basic_ack()
+    deactivate B
+    Note over Q: Task purged permanently from queue
+
+    Note over Q,Store: Phase 3: Duplicate Delivery Suppression (Exactly-Once Effect)
+    Note over Ex,Q: Duplicate arrives (producer retry storm or network hiccup)
+    Q->>B: Push Duplicate Task (request_id="req-101")
+    activate B
+    B->>Store: check_and_acquire("req-101")
+    activate Store
+    Store-->>B: False (Duplicate: already completed in TTL window)
+    deactivate Store
+    Note over B: Suppress work (0ms overhead, zero duplicate side-effects)
+    B->>Q: basic_ack() (Acknowledge and discard)
+    deactivate B
+    Note over Q: Redundant duplicate discarded cleanly from queue
+```
+
