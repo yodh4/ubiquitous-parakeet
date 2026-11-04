@@ -153,7 +153,7 @@ flowchart TD
 | :---: | :--- | :--- | :---: |
 | **M1** | **Synchronous Baseline & Fault Injection** | Direct HTTP RPC, temporal coupling, tail latency amplification, simulated failures. | **Completed** |
 | **M2** | **Resilience & Self-Protection** | Strict socket timeouts, exponential backoff with full jitter, circuit breaker state machine (`CLOSED`/`OPEN`/`HALF-OPEN`). | **Completed** |
-| **M3** | **Asynchronous Decoupling & Reliability** | RabbitMQ broker, Store-and-Forward load leveling, channel prefetch backpressure, idempotent consumer pattern, dead letter queues (DLQ). | **In Progress** |
+| **M3** | **Asynchronous Decoupling & Reliability** | RabbitMQ broker, Store-and-Forward load leveling, channel prefetch backpressure, idempotent consumer pattern, dead letter queues (DLQ). | **Completed** |
 | **M4** | **Scaling, Routing & Observability** | Single edge gateway, horizontal multi-worker scaling, correlation ID propagation, centralized distributed tracing. | **Planned** |
 
 ---
@@ -169,6 +169,8 @@ flowchart TD
 ├── uv.lock                                      # Pinned workspace lockfile
 ├── docs/
 │   ├── ARCHITECTURE_OVERVIEW.md                 # This document (High-level architecture snapshot)
+│   ├── c4-container-diagram.md                  # C4 Level 2 Container Diagram & specifications
+│   ├── c4-component-diagram.md                  # C4 Level 3 Component Diagram & specifications
 │   ├── DOCUMENTATION_RULES.md                   # Strict styling and contrast rules for documentation
 │   ├── milestone-2/                             # 6 detailed guides on distributed resilience
 │   └── milestone-3/                             # 6 detailed guides on RabbitMQ & async architecture
@@ -178,8 +180,9 @@ flowchart TD
 │   │   ├── pyproject.toml
 │   │   └── app/
 │   │       ├── config.py                        # Pydantic Settings (ports, URLs, timeouts)
-│   │       ├── main.py                          # FastAPI routes (/trigger, /circuit-breaker)
+│   │       ├── main.py                          # FastAPI routes (/trigger, /enqueue, /circuit-breaker)
 │   │       ├── schemas.py                       # Pydantic request/response schemas
+│   │       ├── messaging/                       # aio-pika publisher and connection pool
 │   │       └── resilience/                      # Custom-built resilience engine
 │   │           ├── circuit_breaker.py           # CircuitBreaker finite state machine
 │   │           └── retry.py                     # Exponential backoff + full jitter executor
@@ -188,14 +191,17 @@ flowchart TD
 │       ├── pyproject.toml
 │       └── app/
 │           ├── config.py                        # Worker settings
-│           ├── main.py                          # FastAPI route (/work with latency & error simulation)
-│           └── schemas.py                       # Workload schemas
+│           ├── main.py                          # FastAPI routes (/work, /consumer/stats, /consumer/dlq)
+│           ├── schemas.py                       # Workload & consumer schemas
+│           └── messaging/                       # aio-pika consumer, topology, idempotency
 ├── scripts/                                     # Interactive verification & load generation CLI scripts
 │   ├── verify_m1.py                             # Milestone 1 live verification
-│   └── verify_m2.py                             # Milestone 2 live verification
+│   ├── verify_m2.py                             # Milestone 2 live verification
+│   └── verify_m3.py                             # Milestone 3 live verification
 └── tests/                                       # Automated pytest test suites
     ├── test_milestone_1.py                      # M1 automated test suite
-    └── test_milestone_2.py                      # M2 automated test suite
+    ├── test_milestone_2.py                      # M2 automated test suite
+    └── test_milestone_3.py                      # M3 automated test suite
 ```
 
 ---

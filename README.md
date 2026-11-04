@@ -2,7 +2,10 @@
 
 A minimalist, two-service distributed system designed strictly to explore, test, and observe microservices architecture and system design principles without business logic distractions.
 
-> 📖 **Returning to the project?** Read the [System Architecture & Component Overview](docs/ARCHITECTURE_OVERVIEW.md) for a complete high-level snapshot of components, ports, flows, and milestone status.
+> 📖 **Architecture & Diagrams:**  
+> - [System Architecture & Component Overview](docs/ARCHITECTURE_OVERVIEW.md)  
+> - [C4 Level 2: Container Diagram](docs/c4-container-diagram.md)  
+> - [C4 Level 3: Component Diagram](docs/c4-component-diagram.md)
 
 ## Project Structure
 
