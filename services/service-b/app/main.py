@@ -9,6 +9,7 @@ import aio_pika
 from fastapi import FastAPI, HTTPException, Request, status
 
 from app.config import settings
+from app.correlation import CorrelationIdMiddleware, get_correlation_id
 from app.messaging.consumer import TaskConsumer
 from app.schemas import (
     ConsumerStatsResponse,
@@ -48,6 +49,7 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 # Initialize defaults on app.state for testing and non-lifespan runs
 app.state.consumer = TaskConsumer(
@@ -142,4 +144,5 @@ async def perform_work(payload: WorkRequest):
         hostname=HOSTNAME,
         simulated_latency_ms=payload.latency_ms,
         completed_at=datetime.now(UTC),
+        correlation_id=get_correlation_id(),
     )

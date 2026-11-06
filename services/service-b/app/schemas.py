@@ -23,6 +23,7 @@ class WorkResponse(BaseModel):
     hostname: str
     simulated_latency_ms: int
     completed_at: datetime
+    correlation_id: str | None = None
 
 
 class ConsumerStatsResponse(BaseModel):

@@ -11,6 +11,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.correlation import (
+    HEADER_NAME,
+    CorrelationIdMiddleware,
+    get_correlation_id,
+)
 from app.messaging.publisher import MessagePublisher
 from app.resilience import (
     CircuitBreaker,
@@ -64,6 +69,7 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 # Initialize defaults on app.state for testing and non-lifespan runs
 app.state.circuit_breaker = CircuitBreaker(
@@ -115,12 +121,14 @@ async def enqueue_work(payload: EnqueueRequest, request: Request):
             )
 
     request_id = payload.request_id or str(uuid.uuid4())
+    correlation_id = get_correlation_id() or request_id
 
     try:
         await publisher.publish_task(
             request_id=request_id,
             latency_ms=payload.latency_ms,
             failure_rate_pct=payload.failure_rate_pct,
+            correlation_id=correlation_id,
         )
     except (aio_pika.exceptions.AMQPException, RuntimeError, OSError) as exc:
         logger.error("Failed to publish task to RabbitMQ: %s", exc)
@@ -132,6 +140,7 @@ async def enqueue_work(payload: EnqueueRequest, request: Request):
     return EnqueueResponse(
         status="accepted",
         request_id=request_id,
+        correlation_id=correlation_id,
         exchange=settings.rabbitmq_exchange_name,
         routing_key=settings.rabbitmq_routing_key,
         enqueued_at=datetime.now(UTC),
@@ -151,6 +160,7 @@ async def enqueue_work(payload: EnqueueRequest, request: Request):
 )
 async def trigger_work(payload: TriggerRequest, request: Request):
     request_id = str(uuid.uuid4())
+    correlation_id = get_correlation_id() or request_id
     cb: CircuitBreaker = request.app.state.circuit_breaker
     client: httpx.AsyncClient = request.app.state.http_client
 
@@ -180,6 +190,7 @@ async def trigger_work(payload: TriggerRequest, request: Request):
                     status="degraded_fallback",
                     round_trip_duration_ms=round(duration_ms, 2),
                     service_a_timestamp=datetime.now(UTC),
+                    correlation_id=correlation_id,
                     error={
                         "message": "Downstream service is currently unavailable. Circuit breaker is OPEN.",
                         "reason": exc.last_failure_reason,
@@ -203,11 +214,17 @@ async def trigger_work(payload: TriggerRequest, request: Request):
         "latency_ms": payload.latency_ms,
         "failure_rate_pct": payload.failure_rate_pct,
     }
+    downstream_headers = {HEADER_NAME: correlation_id} if correlation_id else {}
     per_attempt_timeout = httpx.Timeout(timeout_seconds, connect=1.0)
 
     async def single_call() -> httpx.Response:
         return await asyncio.wait_for(
-            client.post(downstream_url, json=downstream_payload, timeout=per_attempt_timeout),
+            client.post(
+                downstream_url,
+                json=downstream_payload,
+                headers=downstream_headers,
+                timeout=per_attempt_timeout,
+            ),
             timeout=timeout_seconds,
         )
 
@@ -240,6 +257,7 @@ async def trigger_work(payload: TriggerRequest, request: Request):
             status="success",
             round_trip_duration_ms=round(duration_ms, 2),
             service_a_timestamp=datetime.now(UTC),
+            correlation_id=correlation_id,
             downstream=retry_result.response.json(),
             resilience=resilience_meta,
         )
@@ -259,6 +277,7 @@ async def trigger_work(payload: TriggerRequest, request: Request):
                 status="timeout",
                 round_trip_duration_ms=round(duration_ms, 2),
                 service_a_timestamp=datetime.now(UTC),
+                correlation_id=correlation_id,
                 error=failure_reason,
                 resilience=resilience_meta,
             ).model_dump(mode="json"),
@@ -300,6 +319,7 @@ async def trigger_work(payload: TriggerRequest, request: Request):
             status="downstream_error",
             round_trip_duration_ms=round(duration_ms, 2),
             service_a_timestamp=datetime.now(UTC),
+            correlation_id=correlation_id,
             error=downstream_data or failure_reason,
             resilience=resilience_meta,
         ).model_dump(mode="json"),

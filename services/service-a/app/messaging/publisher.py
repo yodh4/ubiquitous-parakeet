@@ -11,6 +11,7 @@ from aio_pika.abc import (
 )
 
 from app.config import settings
+from app.correlation import get_correlation_id
 
 logger = logging.getLogger("service-a.publisher")
 
@@ -51,10 +52,13 @@ class MessagePublisher:
         request_id: str,
         latency_ms: int,
         failure_rate_pct: float,
+        correlation_id: str | None = None,
     ) -> dict[str, str | int | float]:
         """Packages task envelope and publishes with DeliveryMode.PERSISTENT."""
         if not self.exchange:
             raise RuntimeError("Publisher is not connected to RabbitMQ. Call connect() first.")
+
+        cid = correlation_id or get_correlation_id() or request_id
 
         payload = {
             "request_id": request_id,
@@ -70,9 +74,12 @@ class MessagePublisher:
             body=body,
             delivery_mode=DeliveryMode.PERSISTENT,  # Writes to disk for durability
             content_type="application/json",
-            correlation_id=request_id,
+            correlation_id=cid,
             message_id=request_id,
             timestamp=datetime.now(UTC),
+            headers={
+                "x-correlation-id": cid,
+            },
         )
 
         await self.exchange.publish(

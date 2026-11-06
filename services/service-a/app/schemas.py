@@ -39,6 +39,7 @@ class TriggerResponse(BaseModel):
     status: str
     round_trip_duration_ms: float
     service_a_timestamp: datetime
+    correlation_id: str | None = None
     downstream: dict[str, Any] | None = None
     error: dict[str, Any] | str | None = None
     resilience: ResilienceMetadata | None = None
@@ -73,6 +74,7 @@ class EnqueueRequest(BaseModel):
 class EnqueueResponse(BaseModel):
     status: str = "accepted"
     request_id: str
+    correlation_id: str | None = None
     exchange: str
     routing_key: str
     enqueued_at: datetime

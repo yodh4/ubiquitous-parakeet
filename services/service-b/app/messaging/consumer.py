@@ -14,6 +14,7 @@ from aio_pika.abc import (
 )
 
 from app.config import settings
+from app.correlation import correlation_scope
 from app.messaging.idempotency import IdempotencyStore
 from app.messaging.topology import setup_topology
 
@@ -89,6 +90,10 @@ class TaskConsumer:
             self.active_in_flight += 1
 
         request_id = "unknown"
+        raw_headers = message.headers or {}
+        header_cid = raw_headers.get("x-correlation-id") or raw_headers.get("X-Correlation-ID")
+        correlation_id = str(message.correlation_id or header_cid or "unknown")
+
         try:
             # Parse payload envelope
             data = json.loads(message.body.decode("utf-8"))
@@ -96,55 +101,60 @@ class TaskConsumer:
             latency_ms = int(data.get("latency_ms", 0))
             failure_rate_pct = float(data.get("failure_rate_pct", 0.0))
 
-            logger.info(
-                "Processing message id=%s (latency_ms=%d, failure_rate=%.1f%%, in_flight=%d)",
-                request_id,
-                latency_ms,
-                failure_rate_pct,
-                self.active_in_flight,
-            )
+            if correlation_id == "unknown":
+                correlation_id = request_id
 
-            # Step 1: Atomic Idempotency Check & In-Flight Lease Acquisition (FR-3.3)
-            acquired = await self.idempotency_store.check_and_acquire(request_id)
-            if not acquired:
-                logger.warning(
-                    "Duplicate message id=%s detected (in-flight or completed). Suppressing work and ACK-ing.",
+            async with correlation_scope(correlation_id):
+                logger.info(
+                    "Processing message id=%s correlation_id=%s (latency_ms=%d, failure_rate=%.1f%%, in_flight=%d)",
                     request_id,
+                    correlation_id,
+                    latency_ms,
+                    failure_rate_pct,
+                    self.active_in_flight,
                 )
-                await message.ack()
-                async with self._lock:
-                    self.total_duplicates_skipped += 1
-                    self.active_in_flight -= 1
-                return
 
-            try:
-                # Step 2: Simulate artificial latency if specified
-                if latency_ms > 0:
-                    await asyncio.sleep(latency_ms / 1000.0)
+                # Step 1: Atomic Idempotency Check & In-Flight Lease Acquisition (FR-3.3)
+                acquired = await self.idempotency_store.check_and_acquire(request_id)
+                if not acquired:
+                    logger.warning(
+                        "Duplicate message id=%s detected (in-flight or completed). Suppressing work and ACK-ing.",
+                        request_id,
+                    )
+                    await message.ack()
+                    async with self._lock:
+                        self.total_duplicates_skipped += 1
+                        self.active_in_flight -= 1
+                    return
 
-                # Step 3: Simulate probabilistic failure if specified
-                if failure_rate_pct > 0:
-                    roll = random.uniform(0.0, 100.0)
-                    if roll < failure_rate_pct:
-                        raise RuntimeError(
-                            f"Simulated consumer failure (roll={roll:.2f} < threshold={failure_rate_pct:.2f})"
-                        )
+                try:
+                    # Step 2: Simulate artificial latency if specified
+                    if latency_ms > 0:
+                        await asyncio.sleep(latency_ms / 1000.0)
 
-                # Step 4: Mark COMPLETED in deduplication store and send manual ACK
-                await self.idempotency_store.mark_completed(request_id)
-                await message.ack()
+                    # Step 3: Simulate probabilistic failure if specified
+                    if failure_rate_pct > 0:
+                        roll = random.uniform(0.0, 100.0)
+                        if roll < failure_rate_pct:
+                            raise RuntimeError(
+                                f"Simulated consumer failure (roll={roll:.2f} < threshold={failure_rate_pct:.2f})"
+                            )
 
-                async with self._lock:
-                    self.total_completed += 1
-                    self.last_processed_id = request_id
-                    self.active_in_flight -= 1
+                    # Step 4: Mark COMPLETED in deduplication store and send manual ACK
+                    await self.idempotency_store.mark_completed(request_id)
+                    await message.ack()
 
-                logger.info("Successfully completed and ACKed task id=%s", request_id)
+                    async with self._lock:
+                        self.total_completed += 1
+                        self.last_processed_id = request_id
+                        self.active_in_flight -= 1
 
-            except Exception:
-                # Release in-flight lease on failure so redelivery or DLQ tracking is unblocked
-                await self.idempotency_store.release_in_flight(request_id)
-                raise
+                    logger.info("Successfully completed and ACKed task id=%s", request_id)
+
+                except Exception:
+                    # Release in-flight lease on failure so redelivery or DLQ tracking is unblocked
+                    await self.idempotency_store.release_in_flight(request_id)
+                    raise
 
         except Exception as exc:  # noqa: BLE001 - Worker catch-all to guarantee unhandled task crashes are NACKed to DLQ rather than dropped
             # Unhandled or simulated error -> Send manual NACK without requeue
