@@ -174,7 +174,8 @@ flowchart TD
 │   ├── synchronous-grpc-vs-asynchronous-message-broker.md # Architectural trade-off guide (gRPC vs Broker)
 │   ├── DOCUMENTATION_RULES.md                   # Strict styling and contrast rules for documentation
 │   ├── milestone-2/                             # 6 detailed guides on distributed resilience
-│   └── milestone-3/                             # 6 detailed guides on RabbitMQ & async architecture
+│   ├── milestone-3/                             # 6 detailed guides on RabbitMQ & async architecture
+│   └── milestone-4/                             # Scaling, routing, correlation & observability guides
 ├── services/
 │   ├── service-a/                               # Ingress / Producer service
 │   │   ├── Dockerfile
