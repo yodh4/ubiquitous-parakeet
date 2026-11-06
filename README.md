@@ -5,7 +5,8 @@ A minimalist, two-service distributed system designed strictly to explore, test,
 > 📖 **Architecture & Diagrams:**  
 > - [System Architecture & Component Overview](docs/ARCHITECTURE_OVERVIEW.md)  
 > - [C4 Level 2: Container Diagram](docs/c4-container-diagram.md)  
-> - [C4 Level 3: Component Diagram](docs/c4-component-diagram.md)
+> - [C4 Level 3: Component Diagram](docs/c4-component-diagram.md)  
+> - [Synchronous gRPC vs. Asynchronous Message Broker](docs/synchronous-grpc-vs-asynchronous-message-broker.md)
 
 ## Project Structure
 

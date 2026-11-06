@@ -171,6 +171,7 @@ flowchart TD
 │   ├── ARCHITECTURE_OVERVIEW.md                 # This document (High-level architecture snapshot)
 │   ├── c4-container-diagram.md                  # C4 Level 2 Container Diagram & specifications
 │   ├── c4-component-diagram.md                  # C4 Level 3 Component Diagram & specifications
+│   ├── synchronous-grpc-vs-asynchronous-message-broker.md # Architectural trade-off guide (gRPC vs Broker)
 │   ├── DOCUMENTATION_RULES.md                   # Strict styling and contrast rules for documentation
 │   ├── milestone-2/                             # 6 detailed guides on distributed resilience
 │   └── milestone-3/                             # 6 detailed guides on RabbitMQ & async architecture
