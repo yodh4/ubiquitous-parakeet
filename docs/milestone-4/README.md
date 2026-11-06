@@ -33,4 +33,5 @@ To prevent cognitive overload from learning multiple infrastructure technologies
 
 * **[Implementation Plan & Step-by-Step Roadmap](IMPLEMENTATION_PLAN.md)**
 * **[Phase 1 Inquiry: Distributed Correlation ID & End-to-End Tracing](qa-phase-1-correlation-id.md)**
+* **[Phase 2 Inquiry: Structured JSON Logging & Machine-Readable Telemetry](qa-phase-2-structured-logging.md)**
 * Additional inquiry and verification logs will be recorded as each phase is completed.
