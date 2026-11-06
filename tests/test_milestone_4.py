@@ -233,3 +233,117 @@ async def test_amqp_consumer_extracts_and_binds_correlation_id():
     finally:
         await consumer.stop()
         await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_json_formatter_produces_valid_json_structure():
+    """Verify that JSONFormatter produces valid, parseable JSON with all required keys."""
+    import logging
+
+    sys.path.insert(0, str(ROOT_DIR / "services" / "service-a"))
+    from app.logging_config import JSONFormatter
+
+    formatter = JSONFormatter(service_name="service-a-test")
+    record = logging.LogRecord(
+        name="test.logger",
+        level=logging.INFO,
+        pathname="test.py",
+        lineno=10,
+        msg="Structured log test message with %s",
+        args=("interpolation",),
+        exc_info=None,
+    )
+    record.correlation_id = "trace-json-test-123"
+
+    output = formatter.format(record)
+    parsed = json.loads(output)
+
+    assert parsed["service"] == "service-a-test"
+    assert parsed["level"] == "INFO"
+    assert parsed["logger"] == "test.logger"
+    assert parsed["message"] == "Structured log test message with interpolation"
+    assert parsed["correlation_id"] == "trace-json-test-123"
+    assert "timestamp" in parsed
+
+
+@pytest.mark.asyncio
+async def test_logging_filter_auto_injects_correlation_id_from_contextvars():
+    """Verify that CorrelationIdFilter injects the active contextvars correlation ID into LogRecords."""
+    import io
+    import logging
+
+    for mod in list(sys.modules.keys()):
+        if mod == "app" or mod.startswith("app."):
+            del sys.modules[mod]
+    service_a_dir = str(ROOT_DIR / "services" / "service-a")
+    if service_a_dir in sys.path:
+        sys.path.remove(service_a_dir)
+    sys.path.insert(0, service_a_dir)
+
+    from app.correlation import correlation_scope
+    from app.logging_config import CorrelationIdFilter, JSONFormatter
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(JSONFormatter(service_name="service-a"))
+    handler.addFilter(CorrelationIdFilter())
+
+    test_logger = logging.getLogger("test.auto_inject")
+    test_logger.handlers.clear()
+    test_logger.addHandler(handler)
+    test_logger.setLevel(logging.INFO)
+
+    custom_cid = f"trace-filter-{uuid.uuid4().hex[:8]}"
+
+    # Log inside correlation_scope
+    async with correlation_scope(custom_cid):
+        test_logger.info("Message inside correlation scope")
+
+    # Log outside correlation_scope
+    test_logger.info("Message outside correlation scope")
+
+    lines = stream.getvalue().strip().split("\n")
+    assert len(lines) == 2
+
+    inside_log = json.loads(lines[0])
+    assert inside_log["correlation_id"] == custom_cid
+    assert inside_log["message"] == "Message inside correlation scope"
+
+    outside_log = json.loads(lines[1])
+    assert outside_log["correlation_id"] is None
+    assert outside_log["message"] == "Message outside correlation scope"
+
+
+@pytest.mark.asyncio
+async def test_json_formatter_handles_exceptions_atomically():
+    """Verify that stack traces are formatted inside a single atomic exc_info JSON field."""
+    import logging
+
+    sys.path.insert(0, str(ROOT_DIR / "services" / "service-a"))
+    from app.logging_config import JSONFormatter
+
+    formatter = JSONFormatter(service_name="service-a")
+
+    try:
+        raise ValueError("Simulated failure for traceback test")
+    except ValueError:
+        exc_info = sys.exc_info()
+
+    record = logging.LogRecord(
+        name="test.exception",
+        level=logging.ERROR,
+        pathname="test.py",
+        lineno=42,
+        msg="An unhandled exception occurred",
+        args=(),
+        exc_info=exc_info,
+    )
+
+    output = formatter.format(record)
+    # Must be valid single-line JSON despite multi-line traceback
+    assert "\n" not in output
+    parsed = json.loads(output)
+    assert parsed["level"] == "ERROR"
+    assert "exc_info" in parsed
+    assert "ValueError: Simulated failure for traceback test" in parsed["exc_info"]
+

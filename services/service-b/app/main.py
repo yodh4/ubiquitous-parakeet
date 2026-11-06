@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 
 from app.config import settings
 from app.correlation import CorrelationIdMiddleware, get_correlation_id
+from app.logging_config import setup_logging
 from app.messaging.consumer import TaskConsumer
 from app.schemas import (
     ConsumerStatsResponse,
@@ -19,7 +20,7 @@ from app.schemas import (
     WorkResponse,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+setup_logging(settings.service_name)
 logger = logging.getLogger(settings.service_name)
 
 

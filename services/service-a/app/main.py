@@ -16,6 +16,7 @@ from app.correlation import (
     CorrelationIdMiddleware,
     get_correlation_id,
 )
+from app.logging_config import setup_logging
 from app.messaging.publisher import MessagePublisher
 from app.resilience import (
     CircuitBreaker,
@@ -34,7 +35,7 @@ from app.schemas import (
     TriggerResponse,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+setup_logging(settings.service_name)
 logger = logging.getLogger(settings.service_name)
 
 
