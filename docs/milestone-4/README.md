@@ -32,4 +32,5 @@ To prevent cognitive overload from learning multiple infrastructure technologies
 ## 📚 Milestone 4 Documentation Index
 
 * **[Implementation Plan & Step-by-Step Roadmap](IMPLEMENTATION_PLAN.md)**
+* **[Phase 1 Inquiry: Distributed Correlation ID & End-to-End Tracing](qa-phase-1-correlation-id.md)**
 * Additional inquiry and verification logs will be recorded as each phase is completed.
